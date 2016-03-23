@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# a script for finding paths to the copies of files stored on the
+# highest speed storage medium
+
+set -o errexit
+set -o nounset
+set -o noclobber
+
+# exit if no arguments
+if [ "$#" == "0" ]; then
+    cat <<USAGE
+Usage: $0 observatory_letter channel_name start_time end_time where
+
+    - observatory_letter is either H or L
+    - channel_name       is the full channel name
+    - start_time         is in the form Sep 01 00:00:00 GMT 2015
+    - end_time           is in the same form as start_time
+
+USAGE
+    exit 1
+fi
+
+# requires dropbox uploader
+dbu='/home/stefan.countryman/bin/dropbox_uploader'
+
+observatory_letter="$1"
+channel_name="$2"
+start_time="$3"
+end_time="$4"
+
+# translate times to gps
+gps_start_time=`lalapps_tconvert $start_time`
+echo GPS start time: $gps_start_time
+gps_end_time=`lalapps_tconvert $end_time`
+echo GPS end time: $gps_end_time
+
+# find times
+dump_start_time=`dc -e "$gps_start_time 64/64*p"`
+echo Dump start time: $dump_start_time
+dump_end_time=`dc -e "$gps_end_time 64/64*64+p"`
+echo Dump end time: $dump_end_time
+
+# get data for each
+current_time="$dump_start_time"
+while [ "$current_time" -lt "$dump_end_time" ]; do
+    # get the file path for this time
+    path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R -s \
+    $current_time -e $current_time -u file | sed 's/file:\/\/localhost//'`
+    echo Path: $path
+    # get a descriptive path name where this should be saved
+    outdir=`printf "$channel_name" | tr ':' '_'`
+    outpath="$outdir/$current_time".dat
+    # echo Outpath: $outpath
+
+    # SAVE TO DROPBOX
+#    # dump the data from the gw frame file into a buffer file
+#    tmppath="/tmp/geco_dump_frame_`date +%y-%m-%d_%H-%M-%S-%N`"
+#    echo Tmppath: $tmppath
+#    framecpp_dump_channel --channel "$channel_name" "$path" > "$tmppath"
+#    # upload to dropbox
+#    $dbu upload "$tmppath" "$outpath"
+#    # delete the temp file
+#    rm -v "$tmppath"
+
+    # SAVE LOCALLY
+    home="/home/stefan.countryman"
+    if ! [ -e "$home/$outdir" ]; then
+        mkdir -p "$home/$outdir"
+    fi
+    if [ -e "$home/$outpath" ]; then
+        echo File exists, skipping...
+    else
+        echo Dumping data to $home/$outpath...
+        framecpp_dump_channel --channel "$channel_name" "$path" > "$home/$outpath"
+    fi
+    # move on to the next time
+    let 'current_time+=64'
+done
