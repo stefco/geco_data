@@ -40,29 +40,16 @@ echo Dump start time: $dump_start_time
 dump_end_time=`dc -e "$gps_end_time 64/64*64+p"`
 echo Dump end time: $dump_end_time
 
-# get data for each
+# get data for each time
 current_time="$dump_start_time"
+outdir=`printf "$channel_name" | tr ':' '_'`
 while [ "$current_time" -lt "$dump_end_time" ]; do
-    # get a descriptive path name where this should be saved
-    outdir=`printf "$channel_name" | tr ':' '_'`
+    # create a descriptive path name where this should be saved
     outpath="$outdir/$current_time".dat
     # echo Outpath: $outpath
 
-    # SAVE TO DROPBOX
-#    # dump the data from the gw frame file into a buffer file
-#    tmppath="/tmp/geco_dump_frame_`date +%y-%m-%d_%H-%M-%S-%N`"
-#    echo Tmppath: $tmppath
-#    framecpp_dump_channel --channel "$channel_name" "$path" > "$tmppath"
-#    # upload to dropbox
-#    $dbu upload "$tmppath" "$outpath"
-#    # delete the temp file
-#    rm -v "$tmppath"
-
-    # SAVE LOCALLY
     home="/home/stefan.countryman"
-    if [ -e "$home/$outpath" ]; then
-        echo File $home/$outpath exists, skipping...
-    else
+    if ! [ -e "$home/$outpath" ]; then
         if ! [ -e "$home/$outdir" ]; then
             mkdir -p "$home/$outdir"
         fi
@@ -76,7 +63,10 @@ while [ "$current_time" -lt "$dump_end_time" ]; do
             echo Dumping data to $home/$outpath...
             framecpp_dump_channel --channel "$channel_name" "$path" > "$home/$outpath"
         fi
+    # else
+    #     echo File $home/$outpath exists, skipping...
     fi
+
     # move on to the next time
     let 'current_time+=64'
 done
