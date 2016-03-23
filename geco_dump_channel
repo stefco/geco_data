@@ -44,10 +44,6 @@ echo Dump end time: $dump_end_time
 # get data for each
 current_time="$dump_start_time"
 while [ "$current_time" -lt "$dump_end_time" ]; do
-    # get the file path for this time
-    path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R -s \
-    $current_time -e $current_time -u file | sed 's/file:\/\/localhost//'`
-    echo Path: $path
     # get a descriptive path name where this should be saved
     outdir=`printf "$channel_name" | tr ':' '_'`
     outpath="$outdir/$current_time".dat
@@ -65,12 +61,16 @@ while [ "$current_time" -lt "$dump_end_time" ]; do
 
     # SAVE LOCALLY
     home="/home/stefan.countryman"
-    if ! [ -e "$home/$outdir" ]; then
-        mkdir -p "$home/$outdir"
-    fi
     if [ -e "$home/$outpath" ]; then
-        echo File exists, skipping...
+        echo File $home/$outpath exists, skipping...
     else
+        if ! [ -e "$home/$outdir" ]; then
+            mkdir -p "$home/$outdir"
+        fi
+        # get the file path for this time
+        path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R -s \
+        $current_time -e $current_time -u file | sed 's/file:\/\/localhost//'`
+        echo Path: $path
         echo Dumping data to $home/$outpath...
         framecpp_dump_channel --channel "$channel_name" "$path" > "$home/$outpath"
     fi
