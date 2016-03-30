@@ -6,6 +6,8 @@
 set -o errexit
 set -o nounset
 set -o noclobber
+# print everything before executing
+# set -o xtrace
 
 # exit if no arguments
 if [ "$#" == "0" ]; then
@@ -22,10 +24,10 @@ USAGE
     exit 1
 fi
 
-observatory_letter="$(echo $1 | head -c 1)"
 start_time="$1"
 end_time="$2"
 channel_name="$3"
+observatory_letter="$(echo $channel_name | head -c 1)"
 
 # translate times to gps
 gps_start_time=`lalapps_tconvert "$start_time"`
@@ -45,7 +47,6 @@ outdir=`printf "$channel_name" | tr ':' '_'`
 while [ "$current_time" -lt "$dump_end_time" ]; do
     # create a descriptive path name where this should be saved
     outpath="$outdir/$current_time".dat
-    # echo Outpath: $outpath
 
     home="/home/stefan.countryman"
     if ! [ -e "$home/$outpath" ]; then
@@ -54,7 +55,7 @@ while [ "$current_time" -lt "$dump_end_time" ]; do
         fi
         # get the file path for this time
         path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R -s \
-        $current_time -e $current_time -u file | sed 's/file:\/\/localhost//'`
+        $current_time -e $current_time -u file | sed 's/[^:^\/]*:\/\/[^\/]*//'`
         if [ "$path" == "" ]; then
             echo No frame file found for $current_time, skipping...
         else
