@@ -44,18 +44,20 @@ echo Dump end time: $dump_end_time
 # get data for each time
 current_time="$dump_start_time"
 outdir=`printf "$channel_name" | tr ':' '_'`
+home="/home/stefan.countryman"
+if ! [ -e "$home/$outdir" ]; then
+    mkdir -p "$home/$outdir"
+fi
 while [ "$current_time" -lt "$dump_end_time" ]; do
     # create a descriptive path name where this should be saved
     outpath="$outdir/$current_time".dat
 
-    home="/home/stefan.countryman"
+    # skip the file if it already exists
     if ! [ -e "$home/$outpath" ]; then
-        if ! [ -e "$home/$outdir" ]; then
-            mkdir -p "$home/$outdir"
-        fi
         # get the file path for this time
-        path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R -s \
-        $current_time -e $current_time -u file | sed 's/[^:^\/]*:\/\/[^\/]*//'`
+        path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R \
+            -s $current_time -e $current_time -u file \
+            | sed 's/[^:^\/]*:\/\/[^\/]*//'`
         if [ "$path" == "" ]; then
             echo No frame file found for $current_time, skipping...
         else
@@ -63,8 +65,6 @@ while [ "$current_time" -lt "$dump_end_time" ]; do
             echo Dumping data to $home/$outpath...
             framecpp_dump_channel --channel "$channel_name" "$path" > "$home/$outpath"
         fi
-    # else
-    #     echo File $home/$outpath exists, skipping...
     fi
 
     # move on to the next time
