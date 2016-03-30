@@ -28,9 +28,9 @@ end_time="$2"
 channel_name="$3"
 
 # translate times to gps
-gps_start_time=`lalapps_tconvert $start_time`
+gps_start_time=`lalapps_tconvert "$start_time"`
 echo GPS start time: $gps_start_time
-gps_end_time=`lalapps_tconvert $end_time`
+gps_end_time=`lalapps_tconvert "$end_time"`
 echo GPS end time: $gps_end_time
 
 # find times

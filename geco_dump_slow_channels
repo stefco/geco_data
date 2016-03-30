@@ -10,7 +10,9 @@ set -o noclobber
 if [ "$#" == "0" ]; then
     cat <<USAGE
 Save all slow channel timeseries to text files using geco_dump_channel.
-Usage: $0 start_time end_time where
+Usage: $0 start_time end_time
+
+where
 
     start_time         is in the form Sep 01 00:00:00 GMT 2015
     end_time           is in the same form as start_time
@@ -40,5 +42,5 @@ end_time="$2"
 
 # this will fork off a new process for each channel
 for ch in $channels; do
-    geco_dump_channel ${start_time} ${end_time} ${ch} >> "${ch}".log &
+    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch}".log &
 done
