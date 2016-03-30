@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# just zip up all directories with the word TIMING in them in them.
+# forks multiple processes, so this is a quick way to do it.
+# assumes everything is in the current directory.
+
+# skip log files and zip files
+for f in `ls *TIMING* | sed '/log/d' | sed '/zip/d'`; do
+    zip -q -r $f.zip $f &
+done
