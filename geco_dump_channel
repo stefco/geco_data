@@ -9,10 +9,9 @@ set -o noclobber
 # print everything before executing
 # set -o xtrace
 
-# exit if no arguments
-if [ "$#" == "0" ]; then
+usage() {
     cat <<USAGE
-Usage: $0 start_time end_time channel_name
+Usage: $0 [ -d output_directory ] start_time end_time channel_name
 
 where
 
@@ -20,14 +19,52 @@ where
     end_time           is in the same form as start_time
     channel_name       is the full channel name
 
+and output_directory defaults to ~/channel_name.
+
+$0 -h shows this message.
 USAGE
+}
+
+# get options
+outdir=""
+while getopts ":d:h" opt; do
+    case $opt in
+        d)
+            outdir="$OPTARG"
+            echo "-d was triggered, parameter: $OPTARG" >&2
+            ;;
+        h)
+            usage
+            exit
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument." >&2
+            exit 1
+            ;;
+        ?)
+            echo "Invalid option: -$OPTARG" >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# exit if too few arguments
+if ! [ "$#" == "3" ]; then
+    echo "Expected 3 arguments, got $# instead." >&2
+    usage
     exit 1
 fi
 
+# get arguments
 start_time="$1"
 end_time="$2"
 channel_name="$3"
+# first letter of channel specifies observatory; needed by gw_data_find
 observatory_letter="$(echo $channel_name | head -c 1)"
+# default output directory is ~/channel_name
+[ "$outdir" == "" ] && outdir="$HOME/`printf "$channel_name" | tr ':' '_'`"
 
 # translate times to gps
 gps_start_time=`lalapps_tconvert "$start_time"`
@@ -43,17 +80,15 @@ echo Dump end time: $dump_end_time
 
 # get data for each time
 current_time="$dump_start_time"
-outdir=`printf "$channel_name" | tr ':' '_'`
-home="/home/stefan.countryman"
-if ! [ -e "$home/$outdir" ]; then
-    mkdir -p "$home/$outdir"
+if ! [ -e "$outdir" ]; then
+    mkdir -p "$outdir"
 fi
 while [ "$current_time" -lt "$dump_end_time" ]; do
     # create a descriptive path name where this should be saved
     outpath="$outdir/$current_time".dat
 
     # skip the file if it already exists
-    if ! [ -e "$home/$outpath" ]; then
+    if ! [ -e "$outpath" ]; then
         # get the file path for this time
         path=`gw_data_find -o $observatory_letter -t "$observatory_letter"1_R \
             -s $current_time -e $current_time -u file \
@@ -62,8 +97,8 @@ while [ "$current_time" -lt "$dump_end_time" ]; do
             echo No frame file found for $current_time, skipping...
         else
             echo Path: $path
-            echo Dumping data to $home/$outpath...
-            framecpp_dump_channel --channel "$channel_name" "$path" > "$home/$outpath"
+            echo Dumping data to $outpath...
+            framecpp_dump_channel --channel "$channel_name" "$path" > "$outpath"
         fi
     fi
 
