@@ -22,8 +22,8 @@ USAGE
 fi
 
 # from channels.py file
-# channels=`cat dev/data/channels.py | sed -n '2,13p' | sed -ne 's/.*'"'"'\(.*\)'"'"'$/\1/p'`
-channels="
+# slow_channels=`cat dev/data/channels.py | sed -n '2,13p' | sed -ne 's/.*'"'"'\(.*\)'"'"'$/\1/p'`
+slow_channels="
     H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
     H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
     H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
@@ -41,7 +41,6 @@ start_time="$1"
 end_time="$2"
 
 # this will fork off a new process for each channel
-for ch in $channels; do
-    ch_="`echo ${ch} | tr ':' '_'`"
-    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch_}".log &
+for ch in $slow_channels; do
+    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch}".log &
 done
