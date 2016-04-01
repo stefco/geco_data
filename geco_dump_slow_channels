@@ -42,5 +42,6 @@ end_time="$2"
 
 # this will fork off a new process for each channel
 for ch in $channels; do
-    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch}".log &
+    ch_="`echo ${ch} | tr ':' '_'`"
+    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch_}".log &
 done
