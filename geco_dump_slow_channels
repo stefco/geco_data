@@ -10,7 +10,11 @@ set -o noclobber
 if [ "$#" == "0" ]; then
     cat <<USAGE
 Save all slow channel timeseries to text files using geco_dump_channel.
-Usage: $0 start_time end_time
+Just a shortcut for calling:
+
+    geco_dump -s start_time -e end_time -l slow
+
+Usage: geco_dump_slow_channels start_time end_time
 
 where
 
@@ -21,26 +25,7 @@ USAGE
     exit 1
 fi
 
-# from channels.py file
-# slow_channels=`cat dev/data/channels.py | sed -n '2,13p' | sed -ne 's/.*'"'"'\(.*\)'"'"'$/\1/p'`
-slow_channels="
-    H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
-    H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
-    H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
-    H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2
-    H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3
-    H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3
-    L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
-    L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
-    L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1
-    L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2
-    L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3
-    L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3"
 
 start_time="$1"
 end_time="$2"
-
-# this will fork off a new process for each channel
-for ch in $slow_channels; do
-    geco_dump_channel "${start_time}" "${end_time}" "${ch}" >> "${ch}".log &
-done
+geco_dump -s "${start_time}" -e "${end_time}" -l slow

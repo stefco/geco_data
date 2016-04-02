@@ -36,7 +36,8 @@ OPTIONS:
 USAGE
 }
 
-# lists of channels
+# lists of timediff channels from channels.py file:
+# slow_channels=`cat dev/data/channels.py | sed -n '2,13p' | sed -ne 's/.*'"'"'\(.*\)'"'"'$/\1/p'`
 slow_channels=(
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
     "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1"
@@ -58,33 +59,16 @@ end_time=""
 unset channel_names
 while getopts ":p:s:e:c:l:h" opt; do
     case $opt in
-        p)
-            outdir_pre="$OPTARG"
-            # echo "-p was triggered, parameter: $OPTARG" >&2
-            ;;
-        s)
-            start_time="$OPTARG"
-            # echo "-s was triggered, parameter: $OPTARG" >&2
-            ;;
-        e)
-            end_time="$OPTARG"
-            # echo "-e was triggered, parameter: $OPTARG" >&2
-            ;;
-        c)
-            # you can specify multiple channels; handle as an array
-            channel_names+=("$OPTARG")
-            # echo "-c was triggered, parameter: $OPTARG" >&2
-            # printf "current channel_names entries: ${channel_names[*]} \n" >&2
-            ;;
+        p)  outdir_pre="$OPTARG";;
+        s)  start_time="$OPTARG";;
+        e)  end_time="$OPTARG";;
+        c)  channel_names+=("$OPTARG");;
         l)
             case "$OPTARG" in
                 slow) channel_names+=${slow_channels[*]};;
             esac
             ;;
-        h)
-            usage
-            exit
-            ;;
+        h)  usage && exit;;
         :)
             echo "Option -$OPTARG requires an argument." >&2
             exit 1
