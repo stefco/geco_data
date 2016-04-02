@@ -31,6 +31,9 @@ OPTIONS:
     -p output_directory   defaults to ~/. Timeseries text files will be saved
                           to output_directory/channel_name.
 
+    -P                    do not start a new dump, but check the progress of
+                          an ongoing dump with the given parameters.
+
     -h                    shows this message.
 
 USAGE
@@ -56,8 +59,9 @@ slow_channels=(
 outdir_pre=""
 start_time=""
 end_time=""
+check_dump_progress=false
 unset channel_names
-while getopts ":p:s:e:c:l:h" opt; do
+while getopts ":p:s:e:c:l:Ph" opt; do
     case $opt in
         p)  outdir_pre="$OPTARG";;
         s)  start_time="$OPTARG";;
@@ -68,6 +72,7 @@ while getopts ":p:s:e:c:l:h" opt; do
                 slow) channel_names+=${slow_channels[*]};;
             esac
             ;;
+        P)  check_dump_progress=true;;
         h)  usage && exit;;
         :)
             echo "Option -$OPTARG requires an argument." >&2
@@ -101,10 +106,40 @@ elif ! [ "$channel_names" ]; then
     exit 1
 fi
 
-# fork a process for each channel dump and print output to a log file
-for channel_name in ${channel_names[*]}; do
-    echo Forking for ${channel_name}
-    logfile="$(printf "${channel_name}" | tr ':' '_').log"
-    geco_dump_channel -s "${start_time}" -e "${end_time}" \
-                      -c "${channel_name}" -p "${outdir_pre}" >> "${logfile}" &
-done
+if $check_dump_progress; then
+    # find number of frame files from which to dump
+    gps_start_time=`lalapps_tconvert $start_time`
+    gps_end_time=`lalapps_tconvert $end_time`
+    num_frame_files=`dc -e "$gps_end_time 64/$gps_start_time 64/-1+p"`
+    
+    while true; do
+        echo Start time: `lalapps_tconvert -d $start_time`
+        echo End time: `lalapps_tconvert -d $end_time`
+        echo GPS start time: $gps_start_time
+        echo GPS end time: $gps_end_time
+        echo Files to process: $num_frame_files
+        echo NOTE: If data cannot be found, files will be skipped, causing
+        echo progress to seemingly hang at around 100%.
+        printf 'CURRENT TIME: '
+        date
+        printf 'SIZE MODIFIED         CHANNEL\n'
+        for channel_name in ${channel_names[*]}; do
+            f="$(printf "${channel_name}" | tr ':' '_')"
+            usg=$(du -h --time --max-depth=0 "$f")
+            cnt=$(ls "$f" | wc -l)
+            pct=$(dc -e "$cnt 100*$num_frame_files/p")
+            echo $usg $cnt/$num_frame_files \($pct\%\)
+        done
+        # sleep for 5 minutes before recomputing
+        sleep 300
+    done
+else
+    # fork a process for each channel dump and print output to a log file
+    for channel_name in ${channel_names[*]}; do
+        echo Forking for ${channel_name}
+        logfile="$(printf "${channel_name}" | tr ':' '_').log"
+        geco_dump_channel -s "${start_time}" -e "${end_time}" \
+                          -c "${channel_name}" -p "${outdir_pre}" \
+            >> "${logfile}" &
+    done
+fi
