@@ -62,24 +62,24 @@ end_time=""
 check_dump_progress=false
 unset channel_names
 while getopts ":p:s:e:c:l:Ph" opt; do
-    case $opt in
-        p)  outdir_pre="$OPTARG";;
-        s)  start_time="$OPTARG";;
-        e)  end_time="$OPTARG";;
-        c)  channel_names+=("$OPTARG");;
+    case ${opt} in
+        p)  outdir_pre="${OPTARG}";;
+        s)  start_time="${OPTARG}";;
+        e)  end_time="${OPTARG}";;
+        c)  channel_names+=("${OPTARG}");;
         l)
-            case "$OPTARG" in
+            case "${OPTARG}" in
                 slow) channel_names+=${slow_channels[*]};;
             esac
             ;;
         P)  check_dump_progress=true;;
         h)  usage && exit;;
         :)
-            echo "Option -$OPTARG requires an argument." >&2
+            echo "Option -${OPTARG} requires an argument." >&2
             exit 1
             ;;
         \?)
-            echo "Invalid option: -$OPTARG" >&2
+            echo "Invalid option: -${OPTARG}" >&2
             usage
             exit 1
             ;;
@@ -92,32 +92,32 @@ if ! [ "$#" == 0 ]; then
     echo "Expected only flag arguments; got $# non-flag arguments." >&2
     usage
     exit 1
-elif [ "$start_time" == "" ]; then
+elif [ "${start_time}" == "" ]; then
     echo "Error: Must provide start time with -s flag." >&2
     usage
     exit 1
-elif [ "$end_time" == "" ]; then
+elif [ "${end_time}" == "" ]; then
     echo "Error: Must provide end time with -e flag." >&2
     usage
     exit 1
-elif ! [ "$channel_names" ]; then
+elif ! [ "${channel_names}" ]; then
     echo "Error: Must provide at least one channel name with -c flag." >&2
     usage
     exit 1
 fi
 
-if $check_dump_progress; then
+gps_start_time=$(lalapps_tconvert ${start_time})
+gps_end_time=$(lalapps_tconvert ${end_time})
+if ${check_dump_progress}; then
     # find number of frame files from which to dump
-    gps_start_time=`lalapps_tconvert $start_time`
-    gps_end_time=`lalapps_tconvert $end_time`
-    num_frame_files=`dc -e "$gps_end_time 64/$gps_start_time 64/-1+p"`
+    num_frame_files=$(dc -e "${gps_end_time} 64/${gps_start_time} 64/-1+p")
     while true; do
         clear
-        echo Start time: `lalapps_tconvert -d $start_time`
-        echo End time: `lalapps_tconvert -d $end_time`
-        echo GPS start time: $gps_start_time
-        echo GPS end time: $gps_end_time
-        echo Files to process: $num_frame_files
+        echo Start time: $(lalapps_tconvert -d ${start_time})
+        echo End time: $(lalapps_tconvert -d ${end_time})
+        echo GPS start time: ${gps_start_time}
+        echo GPS end time: ${gps_end_time}
+        echo Files to process: ${num_frame_files}
         echo NOTE: If data cannot be found, files will be skipped, causing
         echo progress to seemingly hang at around 100%.
         printf 'CURRENT TIME: '
@@ -125,14 +125,14 @@ if $check_dump_progress; then
         printf 'SIZE MODIFIED         CHANNEL\n'
         for channel_name in ${channel_names[*]}; do
             dir="$(printf "${channel_name}" | tr ':' '_')"
-            usg=$(du -h --time --max-depth=0 "$dir")
-            cnt=$(ls "$dir" | wc -l)
-            pct=$(dc -e "$cnt 100*$num_frame_files/p")
-            echo $usg $cnt/$num_frame_files \($pct\%\)
+            usg=$(du -h --time --max-depth=0 "${dir}")
+            cnt=$(ls "${dir}" | wc -l)
+            pct=$(dc -e "${cnt} 100*${num_frame_files}/p")
+            echo ${usg} ${cnt}/${num_frame_files} \(${pct}\%\)
         done
         # sleep for 5 minutes before recomputing, or accept input
         read -n 1 -s -t 500 -p 'press [q] to quit or [r] to refresh.' cmnd
-        case "$cmnd" in
+        case "${cmnd}" in
             q) echo && exit;;
             r) continue;;
         esac
