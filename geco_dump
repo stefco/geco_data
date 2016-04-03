@@ -111,8 +111,8 @@ if $check_dump_progress; then
     gps_start_time=`lalapps_tconvert $start_time`
     gps_end_time=`lalapps_tconvert $end_time`
     num_frame_files=`dc -e "$gps_end_time 64/$gps_start_time 64/-1+p"`
-    
     while true; do
+        clear
         echo Start time: `lalapps_tconvert -d $start_time`
         echo End time: `lalapps_tconvert -d $end_time`
         echo GPS start time: $gps_start_time
@@ -124,14 +124,18 @@ if $check_dump_progress; then
         date
         printf 'SIZE MODIFIED         CHANNEL\n'
         for channel_name in ${channel_names[*]}; do
-            f="$(printf "${channel_name}" | tr ':' '_')"
-            usg=$(du -h --time --max-depth=0 "$f")
-            cnt=$(ls "$f" | wc -l)
+            dir="$(printf "${channel_name}" | tr ':' '_')"
+            usg=$(du -h --time --max-depth=0 "$dir")
+            cnt=$(ls "$dir" | wc -l)
             pct=$(dc -e "$cnt 100*$num_frame_files/p")
             echo $usg $cnt/$num_frame_files \($pct\%\)
         done
-        # sleep for 5 minutes before recomputing
-        sleep 300
+        # sleep for 5 minutes before recomputing, or accept input
+        read -n 1 -s -t 500 -p 'press [q] to quit or [r] to refresh.' cmnd
+        case "$cmnd" in
+            q) echo && exit;;
+            r) continue;;
+        esac
     done
 else
     # fork a process for each channel dump and print output to a log file
