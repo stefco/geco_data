@@ -39,6 +39,48 @@ OPTIONS:
 USAGE
 }
 
+# function for dumping channels (inspired by original geco_dump_channel)
+# dump dump_start_time dump_end_time outdir channel_name
+dump () {
+    dump_start_time="${1}"
+    dump_end_time="${2}"
+    outdir="${3}"
+    channel_name="${4}"
+    # get data for each time
+    current_time="${dump_start_time}"
+    if ! [ -e "${outdir}" ]; then
+        mkdir -p "${outdir}"
+    fi
+    # first letter of channel specifies observatory; needed by gw_data_find
+    observatory_letter="$(echo ${channel_name} | head -c 1)"
+    while [ "${current_time}" -lt "${dump_end_time}" ]; do
+        # create a descriptive path name where this should be saved
+    outpath="${outdir}/${current_time}".dat
+
+        # skip the file if it already exists
+        if ! [ -e "${outpath}" ]; then
+            # get the file path for this time
+            path=`gw_data_find -o ${observatory_letter} \
+                               -t ${observatory_letter}1_R \
+                               -s ${current_time} \
+                               -e ${current_time} \
+                               -u file \
+                | sed 's/[^:^\/]*:\/\/[^\/]*//'`
+            if [ "${path}" == "" ]; then
+                echo No frame file found for ${current_time}, skipping...
+            else
+                echo Path: ${path}
+                echo Dumping data to ${outpath}...
+                framecpp_dump_channel --channel "${channel_name}" \
+                                      "${path}" > "${outpath}"
+            fi
+        fi
+
+        # move on to the next time
+        let 'current_time+=64'
+    done
+}
+
 # lists of timediff channels from channels.py file:
 # slow_channels=`cat dev/data/channels.py | sed -n '2,13p' | sed -ne 's/.*'"'"'\(.*\)'"'"'$/\1/p'`
 slow_channels=(
@@ -109,7 +151,7 @@ fi
 gps_start_time=$(lalapps_tconvert ${start_time})
 gps_end_time=$(lalapps_tconvert ${end_time})
 if ${check_dump_progress}; then
-    # find number of frame files from which to dump
+    # total number of frame files to be processed in this time range
     num_frame_files=$(dc -e "${gps_end_time} 64/${gps_start_time} 64/-1+p")
     while true; do
         clear
@@ -138,12 +180,21 @@ if ${check_dump_progress}; then
         esac
     done
 else
+    # dump each channel
+    dump_start_time=$(dc -e "${gps_start_time} 64/64*p")
+    dump_end_time=$(dc -e "${gps_end_time} 64/64*64+p")
     # fork a process for each channel dump and print output to a log file
     for channel_name in ${channel_names[*]}; do
+        # default output directory is ~/channel_name; else is outdir_pre/channel_name
+        if [ "$outdir_pre" == "" ]; then
+            outdir="$HOME/$(printf "${channel_name}" | tr ':' '_')"
+        else
+            outdir="${outdir_pre}/$(printf "${channel_name}" | tr ':' '_')"
+        fi
         echo Forking for ${channel_name}
         logfile="$(printf "${channel_name}" | tr ':' '_').log"
-        geco_dump_channel -s "${start_time}" -e "${end_time}" \
-                          -c "${channel_name}" -p "${outdir_pre}" \
+        dump "${dump_start_time}" "${dump_end_time}" \
+             "${outdir}" "${channel_name}" \
             >> "${logfile}" &
     done
 fi
