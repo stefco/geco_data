@@ -6,10 +6,9 @@ Scripts for manipulating timing data stored in GW frame files.
 
 So far, using these should just involve placing them in a folder in your path
 and then calling the commands by name. Most of them take arguments involving
-start/end times and possibly channel names. So far, for simplicity's sake,
-they all assume that you are keeping your work in the same directory. They
-are simple scripts for doing simple things reliably with large amounts of
-data.
+start/end times and possibly channel names.
+
+To see detailed usage instructions, run the command followed by an `-h` flag.
 
 ## Examples
 
@@ -24,18 +23,14 @@ ls -d -1 *TIMING* | wc -l
 # files before starting
 rm -rf *TIMING*
 # dump files ('Oct 1 2015' is short for 'Oct 01 00:00:00 GMT 2015')
-geco_dump_slow_channels 'Oct 1 2015' 'Nov 1 2015'
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -l slow
 # in a separate terminal session, monitor the progress of this dump; it
 # might appear to hang at around 99% if there are any missing data
 # files, which unfortunately is a very common problem
-geco_dump_slow_channels_progress 'Oct 1 2015' 'Nov 1 2015'
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -l slow -P
 # once the dump is complete, zip everything up
 geco_zip
 ```
-
-Your jaw will drop in astonishment when you see how manageable the resulting
-zip files are. After collecting yourself, upload those zip files to
-wherever they belong and start over.
 
 ## Tips
 
