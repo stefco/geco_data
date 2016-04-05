@@ -119,13 +119,17 @@ dump () {
                 # get the file path for this time
                 if [ "${inpath}" == "" ]; then
                     # echo No frame file found for ${current_time}, skipping...
-                    touch "${outpath}".skipped
+                    touch "${outpath}".missing
                 else
                     # THE GW FRAME FILE PATH IS INCLUDED IN OUTPUT HEADER
                     # echo Path to GW Frame File: ${inpath}
                     # echo Dumping data to ${outpath}...
                     framecpp_dump_channel --channel "${channel_name}" \
                                           "${inpath}" > "${outpath}"
+                    if [ -e "${outpath}".missing ]; then
+                        echo Found missing file ${outpath}.
+                        rm -v ${outpath}.missing
+                    fi
                 fi
             fi
         fi
