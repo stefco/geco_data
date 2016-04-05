@@ -113,7 +113,7 @@ dump () {
         if ${read_from_dumped_files}; then
             if [ -e "${outpath}" ]; then
                 # make sure the channel is correct
-                sed -n "2 {/${channel_name}/!q1};1,6d;s/^Data: //;s/ //g;p" ${outpath}
+                sed -n "2{/${channel_name}/!q1};7s/[Dat: ]//gp" ${outpath}
             else
                 echo No data file found for ${current_time}, exiting. >&2
                 exit 1
@@ -185,7 +185,7 @@ while getopts ":p:s:e:c:l:PTRh" opt; do
         c)  channel_names+=("${OPTARG}");;
         l)
             case "${OPTARG}" in
-                slow) channel_names+=${slow_channels[*]};;
+                slow) channel_names+=( ${slow_channels[@]} );;
             esac
             ;;
         P)  check_dump_progress=true;;
@@ -254,7 +254,7 @@ if ${check_dump_progress}; then
         echo progress to seemingly hang at around 100%.
         printf 'CURRENT TIME: '
         date
-        printf 'SIZE MODIFIED         CHANNEL\n'
+        printf 'SIZE MODIFIED         PATH\n'
         for channel_name in ${channel_names[*]}; do
             outdir="$(get_outdir "${outdir_pre}" "${channel_name}")"
             usg=$(du -h --time --max-depth=0 "${outdir}")
