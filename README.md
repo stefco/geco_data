@@ -13,22 +13,70 @@ To see detailed usage instructions, run the command followed by an `-h` flag.
 ## Examples
 
 Here is how I have been using these scripts to e.g. dump all files
-for October 2015:
+for October 2015.
+
+First, dump the slow channel data (using the `-l` flag to specify the
+slow-channel list) from the entire month of October to the
+`~/oct` directory (each channel will get its own directory within `~/oct`;
+if `-p` is not specified, then `~` will be used by default):
 
 ```bash
-# see what timing files you have from previous runs and count them up
-ls -d -1 *TIMING*
-ls -d -1 *TIMING* | wc -l
-# if everything is done in your previous run, delete the old output
-# files before starting
-rm -rf *TIMING*
-# dump files ('Oct 1 2015' is short for 'Oct 01 00:00:00 GMT 2015')
-geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -l slow
-# in a separate terminal session, monitor the progress of this dump; it
-# might appear to hang at around 99% if there are any missing data
-# files, which unfortunately is a very common problem
-geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -l slow -P
-# once the dump is complete, zip everything up
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -p ~/oct -l slow
+```
+
+You could also just specify a couple of channels you want to
+dump if you don't need all of the timing slow channels:
+
+```bash
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -p ~/oct \
+    "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1" \
+    "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_1"
+```
+
+If you have already dumped data from some of these frame files, they
+will not be re-dumped. The time spent dumping should not depend on the
+number of slow channels, since each channel dump gets its own separate
+process.
+
+While the dump is in progress, you can monitor how many frame files
+out of the total have been dumped so far by adding the `-P` flag
+to your previous query:
+
+```bash
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -p ~/oct -l slow -P
+```
+
+If you need to print a comma-separated timeseries to `stdout`
+(instead of saving each 64-second interval produced by
+`framecpp_dump_channel` to its own file without editing, which is the
+default behavior), you can specify the `-T` flag (for "timeseries"):
+
+```bash
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -T "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+```
+
+The output of this command is a comma-separated timeseries suitable for
+immediate reading into any plotting script, or piping into another utility.
+Note that you can only do this with one channel at a time, for obvious
+reasons.
+If you have already dumped this time range to files, you can get the
+same comma-separated timeseries read straight from text files for a big
+speed-up using the `-R` flag rather than the `-T` flag. This is, of
+course, also useful if you are running the script off of datagrid, and
+you don't have any frame files handy:
+
+```bash
+geco_dump -s 'Oct 1 2015' -e 'Nov 1 2015' -R -p ~/oct "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+```
+
+Note that you have to tell the script where the files were saved originally;
+in this case, assuming we already ran the first example command, they would
+be saved to the `~/oct` directory.
+
+Finally, once you have dumped the files, you can change to the `~/oct`
+directory and zip them all up with:
+
+```
 geco_zip
 ```
 
