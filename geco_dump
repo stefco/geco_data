@@ -24,7 +24,12 @@ OPTIONS:
 
     -s start_time         is in the form Sep 01 00:00:00 GMT 2015. REQUIRED.
 
-    -e end_time           is in the same form as start_time. REQUIRED.
+    -e end_time           is in the same form as start_time. Note that the
+                          final second is NOT included when used with the
+                          -T or -R options below. When used to dump data to
+                          file, the times are rounded up and down so that all
+                          frame files with the included times are dumped.
+                          REQUIRED.
 
     -c channel_name       is the full channel name. Can be used multiple times
 			  to specify multiple channels. At least one channel is
@@ -77,6 +82,60 @@ get_frame_file_path () {
         | sed 's/[^:^\/]*:\/\/[^\/]*//'
 }
 
+# take comma-delimited vals from stdin, delete the first $1 of them
+cut_terms_from_start () {
+    awk -F',' '{
+        for(i='$1'+1;i<NF;i++){
+            printf "%s,", $i
+        };
+        i=NF;
+        printf "%s", $i;
+        printf "\n"
+    }'
+}
+
+# take comma-delimited vals from stdin, delete the last $1 of them
+cut_terms_from_end () {
+    awk -F',' '{
+        for(i=1;i<NF-'$1';i++){
+            printf "%s,", $i
+        };
+        i=NF-'$1';
+        printf "%s", $i;
+        printf "\n"
+    }'
+}
+
+# check if text file corresponds to correct channel, then dump timeseries
+# with each value on a new line
+check_and_dump () {
+    sed -n "
+        2{/${channel_name}/!q1}
+        7s/[Dat: ]//g
+        s/,/"$'\\\n/gp
+    '
+}
+
+# figure out how many lines to cut from the start and end
+cut_lines () {
+    bitrate=${1}
+    current_time=${2}
+    gps_start_time="${3}"
+    gps_end_time="${4}"
+    dump_start_time=$(dc -e "${gps_start_time} 64/64*p")
+    dump_end_time=$(dc -e "${gps_end_time} 64/64*64+p")
+    del_at_start=""                 # delete nothing at start by default
+    del_at_end=""                   # delete nothing at end by default
+    if [ "${current_time}" -eq "${dump_start_time}" ]; then
+        del_at_start="1,$(( ( gps_start_time - current_time ) * bitrate ))d;" 
+    elif [ "${current_time}" -eq $(( dump_end_time - 64 )) ]; then
+        del_at_end="$(( ( gps_end_time - current_time ) * bitrate + 1 )),"'$d;'
+    fi
+    sed "${del_at_start}${del_at_end}"
+}
+    
+    
+
 get_outdir () {
     outdir_pre="${1}"
     channel_name="${2}"
@@ -91,18 +150,30 @@ get_outdir () {
 # function for dumping channels (inspired by original geco_dump_channel)
 # dump dump_start_time dump_end_time outdir channel_name
 dump () {
-    dump_start_time="${1}"
-    dump_end_time="${2}"
+    gps_start_time="${1}"
+    gps_end_time="${2}"
     outdir="${3}"
     channel_name="${4}"
     # make it possible to print purely to a timeseries string. log messages
     # are printed only to stderr.
     print_timeseries_string=${5:-false}
     read_from_dumped_files=${6:-false}
+    # find first and post-ultimate frame file times
+    dump_start_time=$(dc -e "${gps_start_time} 64/64*p")
+    dump_end_time=$(dc -e "${gps_end_time} 64/64*64+p")
     # get data for each time
     current_time="${dump_start_time}"
     if ! [ -e "${outdir}" ]; then
         mkdir -p "${outdir}"
+    fi
+    # if dumping timeseries, get the bit rate from the first dumped second;
+    # this appears on the fifth line of the output of framecpp_dump_channel
+    if ${read_from_dumped_files}; then
+        outpath="${outdir}/${current_time}".dat
+        bitrate=$(( $(sed '5s/[NDat: ]//g;5q;d' ${outpath}) / 64 ))
+    elif ${print_timeseries_string}; then
+        inpath=$(get_frame_file_path ${observatory_letter} ${current_time})
+        bitrate=$(( $(sed '5s/[NDat: ]//g;5q;d' ${inpath}) / 64 ))
     fi
     # first letter of channel specifies observatory; needed by gw_data_find
     observatory_letter="$(echo ${channel_name} | head -c 1)"
@@ -112,8 +183,11 @@ dump () {
         # see if -T flag is activated, i.e. we are printing raw timeseries
         if ${read_from_dumped_files}; then
             if [ -e "${outpath}" ]; then
-                # make sure the channel is correct
-                sed -n "2{/${channel_name}/!q1};7s/[Dat: ]//gp" ${outpath}
+                # make sure the channel is correct and cut unwanted values
+                # from start and end
+                check_and_dump < ${outpath} \
+                    | cut_lines ${bitrate} ${current_time} \
+                                ${gps_start_time} ${gps_end_time}
             else
                 echo No data file found for ${current_time}, exiting. >&2
                 exit 1
@@ -126,9 +200,9 @@ dump () {
             else
                 framecpp_dump_channel --channel "${channel_name}" \
                                       "${inpath}" \
-                    | sed '1,6d' \
-                    | sed 's/^Data: //' \
-                    | tr -d ' '
+                    | check_and_dump \
+                    | cut_lines ${bitrate} ${current_time} \
+                                ${gps_start_time} ${gps_end_time}
             fi
         else
             inpath=$(get_frame_file_path ${observatory_letter} ${current_time})
@@ -270,24 +344,17 @@ if ${check_dump_progress}; then
         esac
     done
 else
-    # dump each channel
-    dump_start_time=$(dc -e "${gps_start_time} 64/64*p")
-    dump_end_time=$(dc -e "${gps_end_time} 64/64*64+p")
     # fork a process for each channel dump and print output to a log file
     for channel_name in ${channel_names[*]}; do
         outdir="$(get_outdir "${outdir_pre}" "${channel_name}")"
-        if ${print_timeseries_string}; then
-            dump "${dump_start_time}" "${dump_end_time}" \
-                 "${outdir}" "${channel_name}" true false \
-                | tr '\n' ','
-        elif ${read_from_dumped_files}; then
-            dump "${dump_start_time}" "${dump_end_time}" \
-                 "${outdir}" "${channel_name}" false true \
-                | tr '\n' ','
+        if ${print_timeseries_string} || ${read_from_dumped_files}; then
+            dump "${gps_start_time}" "${gps_end_time}" \
+                 "${outdir}" "${channel_name}" \
+                 ${print_timeseries_string} ${read_from_dumped_files}
         else
             echo Forking for ${channel_name}
             logfile="${outdir}.log"
-            dump "${dump_start_time}" "${dump_end_time}" \
+            dump "${gps_start_time}" "${gps_end_time}" \
                  "${outdir}" "${channel_name}" \
                 >> "${logfile}" &
         fi
