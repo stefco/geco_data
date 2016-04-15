@@ -132,7 +132,8 @@ cut_lines () {
     del_at_end=""                   # delete nothing at end by default
     if [ "${current_time}" -eq "${dump_start_time}" ]; then
         del_at_start="1,$(( ( gps_start_time - current_time ) * bitrate ))d;" 
-    elif [ "${current_time}" -eq $(( dump_end_time - 64 )) ]; then
+    fi
+    if [ "${current_time}" -eq $(( dump_end_time - 64 )) ]; then
         del_at_end="$(( ( gps_end_time - current_time ) * bitrate + 1 )),"'$d;'
     fi
     sed "${del_at_start}${del_at_end}"
