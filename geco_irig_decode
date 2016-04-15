@@ -16,9 +16,10 @@ USAGE:
 
     geco_irig_decode takes the first second worth of an IRIG-B timeseries from
     stdin and decodes the time it represents, then prints that time to stdout.
-    You can pipe in as much data as you want, but it will only decode the first
-    second worth of data. This helps guarantee its speed, even if the user is
-    foolishly pumping gallons of data into the script.
+    You can pipe in as much data as you want, but it will by default only
+    decode the first second worth of data (you can override this with the -A
+    flag). This helps guarantee its speed, even if the user is foolishly
+    pumping gallons of data into the script.
 
     It will also check to make sure that the signal was not *too* erratic, that
     all control characters are in the right places within the signal, and that
@@ -28,13 +29,17 @@ USAGE:
 
 OPTIONS:
 
+    -A                    decode as many seconds of input as are received.
+
     -h                    print this help dialog.
 
 USAGE
 }
 
-while getopts ":h" opt; do
+decode_all=false
+while getopts ":Ah" opt; do
     case ${opt} in
+        A)  decode_all=true;;
         h)  usage && exit;;
     esac
 done
@@ -126,49 +131,104 @@ y20=56
 y40=57
 y80=58
 
-# make a temporary file to hold the raw output of the read
-tempfile=$(mktemp)
+# read a timeseries from standard input and print the decoded time
+get_time () {
 
-# i think it is pretty clear what the next line does
-sed ${bitrate}q \
-    | sed -n "$(echo {0..99}" ${bitrate}*100/${a1}+p${a2}+p${a3}+p${a4}+p" | dc | sed 's/$/p/')" \
-    | sed 's_$_ '"${threshold}"'/p_' \
-    | dc \
-    | sed 'N;N;N;s/'$'\\\n''//g;s/'${rep_0}'/0/;s/'${rep_1}'/1/;s/'${rep_c}'/c/;/..../q1' \
-    >| "${tempfile}"
+    # make a temporary file to hold the raw output of the read
+    tempfile=$(mktemp)
 
-# check whether control signals are on first line and lines that are
-# multiples of ten
-sed -n '1p;10p;20p;30p;40p;50p;60p;70p;80p;90p;100p' "${tempfile}" \
-    | sed -n '/c/!q1'
+    # i think it is pretty clear what the next line does
+    sed ${bitrate}q \
+        | sed -n "$(echo {0..99}" ${bitrate}*100/${a1}+p${a2}+p${a3}+p${a4}+p" | dc | sed 's/$/p/')" \
+        | sed 's_$_ '"${threshold}"'/p_' \
+        | dc \
+        | sed 'N;N;N;s/'$'\\\n''//g;s/'${rep_0}'/0/;s/'${rep_1}'/1/;s/'${rep_c}'/c/;/..../q1' \
+        >| "${tempfile}"
 
-# decode; read each line into an array
-# from: http://mywiki.wooledge.org/BashFAQ/005?highlight=%28readarray%29#Loading_lines_from_a_file_or_stream
-while IFS= read -r next_char; do
-    chars+=("$next_char")
-done < "${tempfile}"
-[[ $next_char ]] && lines+=("$next_char")
+    # check whether control signals are on first line and lines that are
+    # multiples of ten
+    sed -n '1p;10p;20p;30p;40p;50p;60p;70p;80p;90p;100p' "${tempfile}" \
+        | sed -n '/c/!q1'
 
-s_ones=$((chars[s1] + 2*chars[s2] + 4*chars[s4] + 8*chars[s8]))
-s_tens=$((chars[s10] + 2*chars[s20] + 4*chars[s40]))
+    # decode; read each line into an array
+    # from: http://mywiki.wooledge.org/BashFAQ/005?highlight=%28readarray%29#Loading_lines_from_a_file_or_stream
+    while IFS= read -r next_char; do
+        chars+=("$next_char")
+    done < "${tempfile}"
+    [[ $next_char ]] && lines+=("$next_char")
 
-m_ones=$((chars[m1] + 2*chars[m2] + 4*chars[m4] + 8*chars[m8]))
-m_tens=$((chars[m10] + 2*chars[m20] + 4*chars[m40]))
+    local s_ones=$((chars[s1] + 2*chars[s2] + 4*chars[s4] + 8*chars[s8]))
+    local s_tens=$((chars[s10] + 2*chars[s20] + 4*chars[s40]))
 
-h_ones=$((chars[h1] + 2*chars[h2] + 4*chars[h4] + 8*chars[h8]))
-h_tens=$((chars[h10] + 2*chars[h20]))
+    local m_ones=$((chars[m1] + 2*chars[m2] + 4*chars[m4] + 8*chars[m8]))
+    local m_tens=$((chars[m10] + 2*chars[m20] + 4*chars[m40]))
 
-d_ones=$((chars[d1] + 2*chars[d2] + 4*chars[d4] + 8*chars[d8]))
-d_tens=$((chars[d10] + 2*chars[d20] + 4*chars[d40] + 8*chars[d80]))
-d_hund=$((chars[d100] + 2*chars[d200]))
+    local h_ones=$((chars[h1] + 2*chars[h2] + 4*chars[h4] + 8*chars[h8]))
+    local h_tens=$((chars[h10] + 2*chars[h20]))
 
-y_ones=$((chars[y1] + 2*chars[y2] + 4*chars[y4] + 8*chars[y8]))
-y_tens=$((chars[y10] + 2*chars[y20] + 4*chars[y40] + 8*chars[y80]))
+    local d_ones=$((chars[d1] + 2*chars[d2] + 4*chars[d4] + 8*chars[d8]))
+    local d_tens=$((chars[d10] + 2*chars[d20] + 4*chars[d40] + 8*chars[d80]))
+    local d_hund=$((chars[d100] + 2*chars[d200]))
 
-year=20${y_tens}${y_ones}
-time_of_day=${h_tens}${h_ones}:${m_tens}${m_ones}:${s_tens}${s_ones}
-day_of_year=${d_hund}${d_tens}${d_ones}
-month_and_day=$(day_to_date ${year} ${day_of_year})
+    local y_ones=$((chars[y1] + 2*chars[y2] + 4*chars[y4] + 8*chars[y8]))
+    local y_tens=$((chars[y10] + 2*chars[y20] + 4*chars[y40] + 8*chars[y80]))
 
-echo ${month_and_day} ${time_of_day} ${year}
-rm "${tempfile}"
+    local year=20${y_tens}${y_ones}
+    local time_of_day=${h_tens}${h_ones}:${m_tens}${m_ones}:${s_tens}${s_ones}
+    local day_of_year=${d_hund}${d_tens}${d_ones}
+    local month_and_day=$(day_to_date ${year} ${day_of_year})
+
+    echo ${month_and_day} ${time_of_day} ${year}
+    rm "${tempfile}"
+}
+
+#
+# Reads N lines from input, keeping further lines in the input.  If input has
+# fewer than N lines, throw an error and exit the script; we expect an even
+# multiple of N lines, corresponding to an even multiple of the bitrate. If no
+# lines are read, simply return 1.
+#
+# Arguments:
+#   $1: number N of lines to read.
+#
+# Return code:
+#   0 if exactly N line were read OR if no lines were read
+#   1 if input is empty.
+#   2 if input has fewer than N lines, and exit the script.
+#
+# edited from source:
+# http://stackoverflow.com/questions/8314499/read-n-lines-at-a-time-using-bash
+function readlines () {
+    local N="$1"
+    local line
+    local lines_handled=0
+
+    # Read N lines
+    for i in $(seq 1 $N); do
+        # Try reading a single line
+        read line
+        if [ $? -eq 0 ]
+        then
+            # Output line
+            echo $line
+            let lines_handled+=1
+        else
+            if [ "${lines_handled}" -eq 0 ]; then
+                return 1
+            else
+                echo "Only ${lines_handled} lines handled, expected ${N} lines!" >&2
+                echo "Error while processing second # ${i} from stdin." >&2
+                exit 2
+            fi
+        fi
+    done
+}
+
+# the main loop
+if ${decode_all}; then
+    while one_second_of_data=$(readlines ${bitrate}); do
+        echo "${one_second_of_data}" | get_time
+    done
+else
+    get_time
+fi
