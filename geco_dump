@@ -170,6 +170,8 @@ dump () {
     if ! [ -e "${outdir}" ]; then
         mkdir -p "${outdir}"
     fi
+    # first letter of channel specifies observatory; needed by gw_data_find
+    observatory_letter="$(echo ${channel_name} | head -c 1)"
     # if dumping timeseries, get the bit rate from the first dumped second;
     # this appears on the fifth line of the output of framecpp_dump_channel
     if ${read_from_dumped_files}; then
@@ -177,10 +179,12 @@ dump () {
         bitrate=$(( $(sed '5s/[NDat: ]//g;5q;d' ${outpath}) / 64 ))
     elif ${print_timeseries_string}; then
         inpath=$(get_frame_file_path ${observatory_letter} ${current_time})
-        bitrate=$(( $(sed '5s/[NDat: ]//g;5q;d' ${inpath}) / 64 ))
+        buffer=$(mktemp)
+        # the >| symbol overrides noclobber for this one operation
+        framecpp_dump_channel --channel "${channel_name}" \
+                              "${inpath}" >| "${buffer}"
+        bitrate=$(( $(sed '5s/[NDat: ]//g;5q;d' "${buffer}") / 64 ))
     fi
-    # first letter of channel specifies observatory; needed by gw_data_find
-    observatory_letter="$(echo ${channel_name} | head -c 1)"
     while [ "${current_time}" -lt "${dump_end_time}" ]; do
         # create a descriptive path name where this should be saved
         outpath="${outdir}/${current_time}".dat
@@ -201,6 +205,12 @@ dump () {
             if [ "${inpath}" == "" ]; then
                 echo No frame file found for ${current_time}, exiting. >&2
                 exit 1
+            elif [ "${current_time}" -eq "${dump_start_time}" ]; then
+                # don't bother dumping the first file twice
+                cat "${buffer}" \
+                    | check_and_dump \
+                    | cut_lines ${bitrate} ${current_time} \
+                                ${gps_start_time} ${gps_end_time}
             else
                 framecpp_dump_channel --channel "${channel_name}" \
                                       "${inpath}" \
