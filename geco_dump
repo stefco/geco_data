@@ -167,7 +167,8 @@ dump () {
     dump_end_time=$(dc -e "${gps_end_time} 64/64*64+p")
     # get data for each time
     current_time="${dump_start_time}"
-    if ! [ -e "${outdir}" ]; then
+    if ! ${print_timeseries_string} && ! ${read_from_dumped_files} \
+            && ! [ -e "${outdir}" ]; then
         mkdir -p "${outdir}"
     fi
     # first letter of channel specifies observatory; needed by gw_data_find
