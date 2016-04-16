@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# check that the decoded IRIG-B time (which will give GPS time, not UTC)
+# is correct for a given time.
+
+set -o nounset
+set -o errexit
+set -o noclobber
+
+test_time=${1}
+echo "RUNNING TEST."
+echo
+echo "Test time: ${test_time}"
+
+# we want to get data for the one second after our test time
+test_start=$(lalapps_tconvert -t ${test_time})
+test_end=$(( test_start + 1 ))
+echo "Test time in GPS seconds: ${test_start}"
+echo
+
+# the number of leap seconds for the GPS time standard was frozen
+# in 1980. so, to find the difference between UTC (which still has its
+# leap seconds updated) and GPS, simply take the difference between
+# the number of leap seconds at the test_time and the number back
+# at GPS=0 in 1980:
+leap_seconds=$(( $(lalapps_tconvert -l) - $(lalapps_tconvert -l 0) ))
+echo "Leap seconds at test time: ${leap_seconds}"
+echo
+
+# get a second worth of data and pump it into the IRIG-B decoder script.
+# FOR HANFORD:
+printf "Decoding Hanford IRIG-B... "
+hanford_decoded_time=$(
+    geco_dump -s ${test_start} -e ${test_end} -c H1:CAL-PCALX_IRIGB_OUT_DQ -T \
+        | geco_irig_decode -A \
+        |  xargs -d '\n' -n 1 lalapps_tconvert
+)
+echo "done."
+
+# FOR LIVINGSTON
+printf "Decoding Livingston IRIG-B... "
+livingston_decoded_time=$(
+    geco_dump -s ${test_start} -e ${test_end} -c L1:CAL-PCALX_IRIGB_OUT_DQ -T \
+        | geco_irig_decode -A \
+        |  xargs -d '\n' -n 1 lalapps_tconvert -t
+)
+echo "done."
+echo
+
+echo "Decoded GPS time for Hanford: ${hanford_decoded_time}"
+hanford_measured_diff=$(( hanford_decoded_time - test_start ))
+echo "Difference between Hanford decoded GPS time and UTC:"
+echo "Should be: ${leap_seconds}"
+echo "Actual value: ${hanford_measured_diff}"
+if [ ${hanford_measured_diff} -eq ${leap_seconds} ]; then
+    echo "SUCCESS"
+else
+    echo "FAILURE"
+fi
+
+echo "Decoded GPS time for Livingston: ${livingston_decoded_time}"
+livingston_measured_diff=$(( livingston_decoded_time - test_start ))
+echo "Difference between Livingston decoded GPS time and UTC:"
+echo "Should be: ${leap_seconds}"
+echo "Actual value: ${livingston_measured_diff}"
+if [ ${livingston_measured_diff} -eq ${leap_seconds} ]; then
+    echo "SUCCESS"
+else
+    echo "FAILURE"
+fi
