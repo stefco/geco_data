@@ -328,8 +328,8 @@ elif ${print_timeseries_string} || ${read_from_dumped_files} && ! [ "${#channel_
     exit 1
 fi
 
-gps_start_time=$(lalapps_tconvert ${start_time})
-gps_end_time=$(lalapps_tconvert ${end_time})
+gps_start_time=$(lalapps_tconvert -t ${start_time})
+gps_end_time=$(lalapps_tconvert -t ${end_time})
 if ${check_dump_progress}; then
     # total number of frame files to be processed in this time range
     num_frame_files=$(dc -e "${gps_end_time} 64/${gps_start_time} 64/-1+p")
