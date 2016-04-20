@@ -6,7 +6,7 @@
 # Force matplotlib to not use any Xwindows backend. NECESSARY ON CLUSTER.
 import matplotlib
 matplotlib.use('Agg')
-import fileinput
+import sys
 import time
 import argparse
 import numpy as np
@@ -19,6 +19,8 @@ num_subdivs = 5
 parser = argparse.ArgumentParser()
 parser.add_argument("--detector", help="the detector; used in the title of the output plot")
 parser.add_argument("-O", "--outfile", help="the filename of the generated plot")
+parser.add_argument("-T", "--timeseries", help="copy from stdin to stdout while reading",
+                    action="store_true")
 args = parser.parse_args()
 
 # get the detector name
@@ -43,13 +45,15 @@ bitrate = 16384
 timeseries = np.zeros(bitrate)
 
 # read in data from stdin; don't read more than a second worth of data
-print("loading data")
-f = fileinput.input()
+# print("loading data")
+line = ""
 i = 0
 while i < bitrate:
-    timeseries[i] = float(f.readline())
+    line = float(sys.stdin.readline())
+    timeseries[i] = line
+    if args.timeseries:
+        print(line)
     i += 1
-f.close()
 
 # find max and min values in timeseries; use these to set plot boundaries
 yrange = timeseries.max() - timeseries.min()
@@ -59,15 +63,16 @@ ymin = timeseries.min() - 0.1*yrange
 # the times within the interval
 times = np.linspace(0, 1, num=bitrate, endpoint=False)
 
-print("making plot")
-plt.figure(1)
+# print("making plot")
+plt.close('all')
+plt.figure(1, figsize=(7,10))
 # plot the full second on the first row; lines should be black ('k' option).
 plt.subplot(num_subdivs + 1, 1, 1)
 plt.ylim(ymin, ymax)
 plt.plot(times, timeseries, 'k')
 # make num_subdivs subplots to better show the full second
 for plot_num in range(0, num_subdivs):
-    print("making plot " + str(plot_num))
+    # print("making plot " + str(plot_num))
     plt.subplot(num_subdivs + 1, 1, plot_num+2)
     plt.ylim(ymin, ymax)
     plt.xlim(float(plot_num)/num_subdivs, (float(plot_num)+1)/num_subdivs)
@@ -78,5 +83,6 @@ for plot_num in range(0, num_subdivs):
 plt.suptitle("One Second of IRIG-B Signal" + detector_name)
 plt.xlabel("Time since start of second [$s$]")
 # plt.ylabel("IRIG-B Signal")
-print("saving plot")
+# print("saving plot")
+plt.subplots_adjust(left=0.125, right=0.9, bottom=0.1, top=0.9, wspace=0.2, hspace=0.5)
 plt.savefig(output_filename)
