@@ -69,6 +69,17 @@ OPTIONS:
                           previously generated text files before falling back
                           to reading from GW frame files.
 
+    -H                    If -R and/or -T are specified, print the start, print
+                          a header BEFORE the timeseries output consisting of
+                          the following information:
+
+                              channel_name
+                              start_time
+                              end_time
+
+                          This information completely characterizes the following
+                          timeseries, and can be used to e.g. generate plots.
+
     -h                    shows this message.
 
 USAGE
@@ -266,8 +277,9 @@ end_time=""
 check_dump_progress=false
 read_from_dumped_files=false
 print_timeseries_string=false
+print_header=false
 unset channel_names
-while getopts ":p:s:e:c:l:PTRh" opt; do
+while getopts ":p:s:e:c:l:PTRHh" opt; do
     case ${opt} in
         p)  outdir_pre="${OPTARG}";;
         s)  start_time="${OPTARG}";;
@@ -281,6 +293,7 @@ while getopts ":p:s:e:c:l:PTRh" opt; do
         P)  check_dump_progress=true;;
         T)  print_timeseries_string=true;;
         R)  read_from_dumped_files=true;;
+        H)  print_header=true;;
         h)  usage && exit;;
         :)
             echo "Option -${OPTARG} requires an argument." >&2
@@ -326,6 +339,10 @@ elif ${print_timeseries_string} || ${read_from_dumped_files} && ! [ "${#channel_
     echo "Error: Must specify exactly one channel name with -T or -R flag." >&2
     usage
     exit 1
+elif ${print_header} && ! ${print_timeseries_string} && ! ${read_from_dumped_files}; then
+    echo "Error: Must specify -R or -T when trying to print header with -H flag"
+    usage
+    exit 1
 fi
 
 gps_start_time=$(lalapps_tconvert -t ${start_time})
@@ -364,6 +381,14 @@ else
     for channel_name in ${channel_names[*]}; do
         outdir="$(get_outdir "${outdir_pre}" "${channel_name}")"
         if ${print_timeseries_string} || ${read_from_dumped_files}; then
+            if ${print_header}; then
+                # print header information if necessary
+                start_time_text=$(lalapps_tconvert -d ${start_time})
+                end_time_text=$(lalapps_tconvert -d ${end_time})
+                echo "${channel_name}"
+                echo "${start_time_text}"
+                echo "${end_time_text}"
+            fi
             dump "${gps_start_time}" "${gps_end_time}" \
                  "${outdir}" "${channel_name}" \
                  ${print_timeseries_string} ${read_from_dumped_files}
