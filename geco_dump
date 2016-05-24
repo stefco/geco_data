@@ -18,7 +18,7 @@ ARGUMENTS:
 
     All arguments are interpreted as channel names. This makes it easy to use
     a pipe and xargs to choose channel names. Other options must be set
-    using
+    using option flags.
 
 OPTIONS:
 
@@ -97,31 +97,7 @@ get_frame_file_path () {
         | sed 's/[^:^\/]*:\/\/[^\/]*//'
 }
 
-# take comma-delimited vals from stdin, delete the first $1 of them
-cut_terms_from_start () {
-    awk -F',' '{
-        for(i='$1'+1;i<NF;i++){
-            printf "%s,", $i
-        };
-        i=NF;
-        printf "%s", $i;
-        printf "\n"
-    }'
-}
-
-# take comma-delimited vals from stdin, delete the last $1 of them
-cut_terms_from_end () {
-    awk -F',' '{
-        for(i=1;i<NF-'$1';i++){
-            printf "%s,", $i
-        };
-        i=NF-'$1';
-        printf "%s", $i;
-        printf "\n"
-    }'
-}
-
-# check if text file corresponds to correct channel, then dump timeseries
+# check if text from stdin corresponds to correct channel, then dump timeseries
 # with each value on a new line
 check_and_dump () {
     sed -n "
@@ -131,7 +107,9 @@ check_and_dump () {
     '
 }
 
-# figure out how many lines to cut from the start and end
+# cut lines from the start and end of the dumped timeseries so that the output
+# timeseries ultimately corresponds to the specified start/end times, rather
+# than the start/end times of the frame files
 cut_lines () {
     bitrate=${1}
     current_time=${2}
@@ -149,9 +127,8 @@ cut_lines () {
     fi
     sed "${del_at_start}${del_at_end}"
 }
-    
-    
 
+# get the path to the output directory based on channel name and path prefix
 get_outdir () {
     outdir_pre="${1}"
     channel_name="${2}"

@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# bash script template by Stefan Countryman
+# TODO WRITE SCRIPT SUMMARY HERE
+
+set -o errexit
+set -o nounset
+set -o noclobber
+# print everything before executing; good for debugging, off by default
+# set -o xtrace
+
+##############################
+# HELP MESSAGE
+##############################
+# TODO CUSTOMIZE OPTIONS
+usage() {
+    cat <<USAGE
+USAGE: command_name_here [ OPTIONS ] ARGUMENTS ...
+
+ARGUMENTS:
+
+    DESCRIBE ARGUMENTS HERE
+
+OPTIONS:
+
+    -h                    shows this message.
+
+USAGE
+}
+
+##############################
+# GET OPTION FLAGS
+##############################
+# TODO DEFINE OPTION VARIABLES HERE
+# TODO DEFINE OPTION FLAGS BELOW
+while getopts "h" opt; do
+    case ${opt} in
+# TODO HANDLE OPTION FLAGS HERE
+        h)  usage && exit;;
+        :)
+            echo "Option -${OPTARG} requires an argument." >&2
+            exit 1
+            ;;
+        \?)
+            echo "Invalid option: -${OPTARG}" >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+##############################
+# DEFINE HELPER FUNCTIONS
+##############################
+
+# TODO DEFINE HELPER FUNCTIONS
+
+##############################
+# MAIN BODY
+##############################
+
+# TODO ADD MAIN BODY BELOW

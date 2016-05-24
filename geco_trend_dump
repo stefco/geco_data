@@ -1,0 +1,132 @@
+#!/bin/bash
+
+# Stefan Countryman, 5/24/16
+# Download minute trends for a given channel
+
+set -o errexit
+set -o nounset
+set -o noclobber
+# print everything before executing; good for debugging, off by default
+# set -o xtrace
+
+##############################
+# HELP MESSAGE
+##############################
+usage() {
+    cat <<USAGE
+Download minute trends for a given channel and dump them into tabular text
+files, where:
+
+    - First line is a header with the channel name
+    - Second line is a header with the trend extension (e.g. max, min, mean)
+    - First column is the time column
+    - Second column is the channel value column
+
+USAGE: geco_trend_dump [ OPTIONS ] -s start_time -e end_time -t trend_extensions channel_names ...
+
+ARGUMENTS:
+
+    All arguments are interpreted as channel names. This makes it easy to use
+    a pipe and xargs to choose channel names. Other options must be set
+    using option flags.
+
+    In addition to specifying the start and end times via the -s and -e flags,
+    the user can provide a tabular list of start/stop times via STDIN, where
+    the first column contains start times and the second column contains
+    end times for each time interval. The time intervals provided will be
+    handled sequentially as they are fed into stdin.
+
+OPTIONS:
+
+    -s start_time         is in the form Sep 01 00:00:00 GMT 2015. REQUIRED.
+
+    -e end_time           is in the same form as start_time. Note that the
+                          final second is NOT included when used with the
+                          -T or -R options below. When used to dump data to
+                          file, the times are rounded up and down so that all
+                          frame files with the included times are dumped.
+                          REQUIRED.
+
+    -t trend_extensions   what type of statistics should be downloaded.
+                          Accepts a comma-delimited list of trend extensions
+                          from the following set of options:
+
+                              mean  -- mean value of the trend
+                              min   -- minimum value of the trend
+                              max   -- maximum value of the trend
+                              n     -- number of data points per trend value
+                              rms   -- root mean square value of the trend
+
+                          e.g. -t mean,min,max
+
+                          (Note that standard deviation can be computed from
+                          rms and mean values.) This option is REQUIRED.
+
+    -p output_directory   defaults to ~/. Timeseries text files will be saved
+                          to output_directory/channel_name.
+
+    -h                    shows this message.
+
+USAGE
+}
+
+##############################
+# DEFINE HELPER FUNCTIONS
+##############################
+
+# TODO DEFINE HELPER FUNCTIONS
+
+# get the path to the output directory based on channel name and path prefix
+get_outdir () {
+    outdir_pre="${1}"
+    channel_name="${2}"
+    # default output directory is ~/channel_name; else is outdir_pre/channel_name
+    if [ "$outdir_pre" == "" ]; then
+        printf "$HOME/$(printf "${channel_name}" | tr ':' '_')"
+    else
+        printf "${outdir_pre}/$(printf "${channel_name}" | tr ':' '_')"
+    fi
+}
+
+# reformat the output of an nds_query into a tabular format with time in the
+# first column and trend value in the second
+tabularize_nds_query () {
+    # TODO: finish
+}
+
+# dump the trend timeseries to disk
+dump_trend () {
+    gps_start_time="${1}"
+    gps_end_time="${2}"
+    outdir="${3}"
+    channel_name="${4}"
+    # TODO: finish
+}
+
+##############################
+# GET OPTION FLAGS
+##############################
+# TODO DEFINE OPTION VARIABLES HERE
+# TODO DEFINE OPTION FLAGS BELOW
+while getopts "h" opt; do
+    case ${opt} in
+# TODO HANDLE OPTION FLAGS HERE
+        h)  usage && exit;;
+        :)
+            echo "Option -${OPTARG} requires an argument." >&2
+            exit 1
+            ;;
+        \?)
+            echo "Invalid option: -${OPTARG}" >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+##############################
+# MAIN BODY
+##############################
+
+# TODO ADD MAIN BODY BELOW
