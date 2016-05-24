@@ -15,10 +15,14 @@ set -o noclobber
 usage() {
     cat <<USAGE
 Download minute trends for a given channel and dump them into tabular text
-files, where:
+files, where the first three lines are a header with the following information:
 
-    - First line is a header with the channel name
-    - Second line is a header with the trend extension (e.g. max, min, mean)
+    - First line contains the channel name
+    - Second line contains the trend extension (e.g. max, min, mean)
+    - Third line contains column labels
+
+And the remaining lines are data, formatted as follows:
+
     - First column is the time column
     - Second column is the channel value column
 
@@ -48,7 +52,7 @@ OPTIONS:
                           REQUIRED.
 
     -t trend_extensions   what type of statistics should be downloaded.
-                          Accepts a comma-delimited list of trend extensions
+                          Accepts a trend extension
                           from the following set of options:
 
                               mean  -- mean value of the trend
@@ -56,8 +60,6 @@ OPTIONS:
                               max   -- maximum value of the trend
                               n     -- number of data points per trend value
                               rms   -- root mean square value of the trend
-
-                          e.g. -t mean,min,max
 
                           (Note that standard deviation can be computed from
                           rms and mean values.) This option is REQUIRED.
@@ -71,7 +73,17 @@ USAGE
 }
 
 ##############################
-# DEFINE HELPER FUNCTIONS
+# CONSTANTS
+##############################
+
+# TODO DEFINE CONSTANTS
+MAX_TIME_INTERVAL=21600           # 21600 seconds is 6 hours
+SECONDS_PER_VAL=60                # Each value represents 60 seconds of data
+CHAN_TYPE='m-trend'               # Only use minute trends for now
+NDS_SERVER='nds.ligo.caltech.edu'
+
+##############################
+# HELPER FUNCTIONS
 ##############################
 
 # TODO DEFINE HELPER FUNCTIONS
@@ -88,19 +100,49 @@ get_outdir () {
     fi
 }
 
+# perform the nds_query and print output
+run_nds_query () {
+    gps_start_time="${1}"
+    delta_t="${2}"
+    channel_name="${3}"
+    trend_extension="${4}"
+    nds_query \
+            -n "${NDS_SERVER}" \
+            -s "${gps_start_time}" \
+            -d "${delta_t}" \
+            -v "${channel_name}.${trend_extension},${CHAN_TYPE}"
+}
+
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second
-tabularize_nds_query () {
-    # TODO: finish
+tabularize_nds_query_result () {
+    # TODO: figure out when we switch over to the next minute (probably at
+    # integer multiples of 64?)
+    read l
+    gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
+    read
+    read
+    read l
+    n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
+    sed 's/ *[0-9]* *//;s/  */\'$'\n/g' \
+        | awk '{printf "%d\t%s\n", (NR-1)*'"${SECONDS_PER_VAL}+${gps_start_time}"', $0}'
 }
 
 # dump the trend timeseries to disk
 dump_trend () {
     gps_start_time="${1}"
     gps_end_time="${2}"
-    outdir="${3}"
-    channel_name="${4}"
-    # TODO: finish
+    channel_name="${3}"
+    trend_extension="${4}"
+    outdir="${5}"
+    delta_t=$((gps_start_time - gps_end_time))
+    outfile="${outdir}/${gps_start_time}_to_${gps_end_time}.dat"
+    echo ${channel_name} > "${outfile}"
+    echo ${trend_extension} >> "${outfile}"
+    printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
+    run_nds_query "${gps_start_time}" "${delta_t}" \
+            "${channel_name}" "${trend_extension}" \
+        | tabularize_nds_query_result >> "${outfile}"
 }
 
 ##############################
