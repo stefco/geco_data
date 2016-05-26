@@ -26,7 +26,7 @@ And the remaining lines are data, formatted as follows:
     - First column is the time column
     - Second column is the channel value column
 
-USAGE: geco_trend_dump [ OPTIONS ] -s start_time -e end_time -t trend_extensions channel_names ...
+USAGE: geco_trend_dump [ OPTIONS ] [ -s start_time -e end_time ] -t trend_extensions channel_names ...
 
 ARGUMENTS:
 
@@ -42,14 +42,17 @@ ARGUMENTS:
 
 OPTIONS:
 
-    -s start_time         is in the form Sep 01 00:00:00 GMT 2015. REQUIRED.
+    -s start_time         is in the form Sep 01 00:00:00 GMT 2015. Either this
+                          or a sequence of line-delimited start/end time pairs
+                          is REQUIRED.
 
     -e end_time           is in the same form as start_time. Note that the
                           final second is NOT included when used with the
                           -T or -R options below. When used to dump data to
                           file, the times are rounded up and down so that all
                           frame files with the included times are dumped.
-                          REQUIRED.
+			  Either this or a sequence of line-delimited start/end
+                          time pairs is REQUIRED.
 
     -t trend_extensions   what type of statistics should be downloaded.
                           Accepts a trend extension
@@ -90,8 +93,8 @@ NDS_SERVER='nds.ligo.caltech.edu'
 
 # get the path to the output directory based on channel name and path prefix
 get_outdir () {
-    outdir_pre="${1}"
-    channel_name="${2}"
+    local outdir_pre="${1}"
+    local channel_name="${2}"
     # default output directory is ~/channel_name; else is outdir_pre/channel_name
     if [ "$outdir_pre" == "" ]; then
         printf "$HOME/$(printf "${channel_name}" | tr ':' '_')"
@@ -102,10 +105,10 @@ get_outdir () {
 
 # perform the nds_query and print output
 run_nds_query () {
-    gps_start_time="${1}"
-    delta_t="${2}"
-    channel_name="${3}"
-    trend_extension="${4}"
+    local gps_start_time="${1}"
+    local delta_t="${2}"
+    local channel_name="${3}"
+    local trend_extension="${4}"
     nds_query \
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
@@ -116,8 +119,6 @@ run_nds_query () {
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second
 tabularize_nds_query_result () {
-    # TODO: figure out when we switch over to the next minute (probably at
-    # integer multiples of 64?)
     read l
     gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
     read
@@ -128,32 +129,103 @@ tabularize_nds_query_result () {
         | awk '{printf "%d\t%s\n", (NR-1)*'"${SECONDS_PER_VAL}+${gps_start_time}"', $0}'
 }
 
-# dump the trend timeseries to disk
+# dump the trend timeseries to disk. this is where the work gets done.
 dump_trend () {
-    gps_start_time="${1}"
-    gps_end_time="${2}"
-    channel_name="${3}"
-    trend_extension="${4}"
-    outdir="${5}"
-    delta_t=$((gps_start_time - gps_end_time))
-    outfile="${outdir}/${gps_start_time}_to_${gps_end_time}.dat"
+    local gps_start_time="${1}"
+    local gps_end_time="${2}"
+    local channel_name="${3}"
+    local trend_extension="${4}"
+    local outdir="${5}"
+    local delta_t=$((gps_start_time - gps_end_time))
+    local outfile="${outdir}/${gps_start_time}_to_${gps_end_time}.${trend_extension}.dat"
+    # next three lines add a descriptive header to the file
     echo ${channel_name} > "${outfile}"
     echo ${trend_extension} >> "${outfile}"
     printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
+    # this dumps the tabularized data
     run_nds_query "${gps_start_time}" "${delta_t}" \
             "${channel_name}" "${trend_extension}" \
         | tabularize_nds_query_result >> "${outfile}"
+}
+
+# concatenate start/stop times specified using flags to the list of start/stop
+# times provided via stdin
+concatenate_time_segments () {
+    local gps_start_time="${1}"
+    local gps_end_time="${2}"
+    # check if start and end time are nonempty; if so, include them
+    if [ -z ${gps_start_time:+x} ] && [ -z ${gps_end_time:+x} ]; then
+        first_time_segment=""
+    elif [ -z ${gps_start_time:+x} ] || [ -z ${gps_end_time:+x} ]; then
+        echo "Must provide both start and stop times, or neither" >&2 && exit 1
+    else
+        first_time_segment="${gps_end_time} ${gps_start_time}"$'\n'
+    fi
+    printf "${first_time_segment}" && cat -
+}
+
+# round the start/stop times to the nearest integer multiples of 60 (round
+# start down and end up to be inclusive)
+round_time_segments () {
+    awk '
+        function ceil(x){
+            return (x == int(x)) ? x : int(x)+1
+        }
+        {
+            print int($1/60)*60 " " ceil($2/60)*60
+        }
+    '
+}
+
+# split each segment into sub-segments of max-length 6 hours so that queries
+# aren't too long for nds to handle
+split_time_segments () {
+    while read -a segment; do
+        gps_start_time="${segment[0]}"
+        gps_end_time="${segment[1]}"
+        next_epoch=$((gps_start_time / 6000 * 6000 + 6000))
+        split_segment="${gps_start_time} "
+        while [ ${next_epoch} -lt ${gps_end_time} ]; do
+            split_segment="${split_segment}${next_epoch}"$'\n'"${next_epoch} "
+            next_epoch=$((next_epoch + 6000))
+        done
+        split_segment="${split_segment}${gps_end_time}"
+        echo "${split_segment}"
+    done
+}
+
+# if multiple trend_extensions are specified, recursively fork for each one.
+# must pipe list of start/stop times to this process.
+fork_process_for_each_trend_extension () {
+    local channel_name="${1}"
+    local trend_extensions="${2}"
+    # fork a subprocess for each trend_extension, executing geco_trend_dump
+    # for each one and feeding stdin from this process to each of the
+    # forked processes using tee.
+    eval "
+        tee $(
+            echo "${trend_extensions}" \
+                | tr , '\n' \
+                | sed "s/.*/>(geco_trend_dump -t & "${channel_name}") \\\\/"
+        ) >/dev/null
+    "
 }
 
 ##############################
 # GET OPTION FLAGS
 ##############################
 # TODO DEFINE OPTION VARIABLES HERE
+outdir_pre=""
+start_time=""
+end_time=""
 # TODO DEFINE OPTION FLAGS BELOW
-while getopts "h" opt; do
+while getopts ":p:s:e:h" opt; do
     case ${opt} in
 # TODO HANDLE OPTION FLAGS HERE
         h)  usage && exit;;
+        p)  outdir_pre="${OPTARG}";;
+        s)  start_time="${OPTARG}";;
+        e)  end_time="${OPTARG}";;
         :)
             echo "Option -${OPTARG} requires an argument." >&2
             exit 1
