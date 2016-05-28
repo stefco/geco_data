@@ -26,7 +26,7 @@ And the remaining lines are data, formatted as follows:
     - First column is the time column
     - Second column is the channel value column
 
-USAGE: geco_trend_dump [ OPTIONS ] [ -s start_time -e end_time ] -t trend_extensions channel_names ...
+USAGE: geco_trend_dump [ -p output_directory ] -s start_time -e end_time -t trend_extensions -c channel_name
 
 ARGUMENTS:
 
@@ -54,6 +54,8 @@ OPTIONS:
 			  Either this or a sequence of line-delimited start/end
                           time pairs is REQUIRED.
 
+    -c channel_name
+
     -t trend_extensions   what type of statistics should be downloaded.
                           Accepts a trend extension
                           from the following set of options:
@@ -68,7 +70,7 @@ OPTIONS:
                           rms and mean values.) This option is REQUIRED.
 
     -p output_directory   defaults to ~/. Timeseries text files will be saved
-                          to output_directory/channel_name.
+                          to output_directory/geco_trend_dump.d/channel_name.
 
     -h                    shows this message.
 
@@ -85,12 +87,17 @@ SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
 CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
+LOGFILE=/dev/stderr           # by default, just log to STDERR
 
 ##############################
 # HELPER FUNCTIONS
 ##############################
 
 # DEFINE HELPER FUNCTIONS
+
+log () {
+    echo "$(date +'%D %H:%M:%S:') $*" >> "$LOGFILE"
+}
 
 # get the path to the output directory based on channel name and path prefix
 get_outdir () {
@@ -119,7 +126,8 @@ run_nds_query () {
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
             -d "${delta_t}" \
-            -v "${channel_name}.${trend_extension},${CHAN_TYPE}"
+            -v "${channel_name}.${trend_extension},${CHAN_TYPE}" \
+        && log "nds_query successful: $*"
 }
 
 # reformat the output of an nds_query into a tabular format with time in the
@@ -223,6 +231,7 @@ fork_process_for_each_trend_extension () {
 outdir_pre=""
 start_time=""
 end_time=""
+channel_name=""
 trend_extensions=""
 # DEFINE OPTION FLAGS BELOW
 while getopts ":s:e:t:p:h" opt; do
@@ -230,6 +239,7 @@ while getopts ":s:e:t:p:h" opt; do
 # HANDLE OPTION FLAGS HERE
         s)  start_time="${OPTARG}";;
         e)  end_time="${OPTARG}";;
+        c)  channel_name="${OPTARG}";;
         t)  trend_extensions="${OPTARG}";;
         p)  outdir_pre="${OPTARG}";;
         h)  usage && exit;;
@@ -245,13 +255,6 @@ while getopts ":s:e:t:p:h" opt; do
     esac
 done
 shift $((OPTIND-1))
-# get channel name
-if [ $# -eq 1 ]; then
-    echo "Error: must provide exactly one channel name as argument." >&2
-    exit 1
-else
-    channel_name="${1}"
-fi
 # CONFIRM VALIDITY OF INPUT
 # make sure the trend extensions provided are valid
 check_trend_extensions="${trend_extensions}"
@@ -263,15 +266,18 @@ if sed '/^,*$/!q1' <<<"$trend_extensions"; then
     printf "$VALID_TREND_EXTENSIONS"'\n' >&2
     exit 1
 fi
-# start, end, and trend_extensions are required
+# start, end, channel_name, and trend_extensions are required
 if [ -z ${start_time+x} ]; then
-    echo "Must provide -s start_time." >&2
+    echo "Error: Must provide -s start_time." >&2
     exit 1
 elif [ -z ${end_time+x} ]; then
-    echo "Must provide -e end_time." >&2
+    echo "Error: Must provide -e end_time." >&2
+    exit 1
+elif [ -z ${channel_name+x} ]; then
+    echo "Error: Must provide -c channel_name" >&2
     exit 1
 elif [ -z ${trend_extensions+x} ]; then
-    echo "Must provide -t trend_extensions." >&2
+    echo "Error: Must provide -t trend_extensions." >&2
     exit 1
 fi
 # get the gps times, in case the input was human-readable
@@ -279,7 +285,7 @@ gps_start_time=$(lalapps_tconvert -t ${start_time})
 gps_end_time=$(lalapps_tconvert -t ${end_time})
 # start must be before end
 if [ ${gps_end_time} -le ${gps_start_time} ]; then
-    echo "End time must be strictly greater than start time." >&2
+    echo "Error: End time must be strictly greater than start time." >&2
     exit 1
 fi
 
