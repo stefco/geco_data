@@ -7,7 +7,7 @@ set -o errexit
 set -o nounset
 set -o noclobber
 # print everything before executing; good for debugging, off by default
-# set -o xtrace
+set -o xtrace
 
 ##############################
 # HELP MESSAGE
@@ -42,19 +42,19 @@ ARGUMENTS:
 
 OPTIONS:
 
-    -s start_time         is in the form Sep 01 00:00:00 GMT 2015. Either this
+    -s start_time         is in the form Sep 01 00:00:00 GMT 2015 (or any
+                          format recognizable by lalapps_tconvert), or is a
+                          gps time like 1125100817. Either this
                           or a sequence of line-delimited start/end time pairs
-                          is REQUIRED.
+                          in the same format is REQUIRED.
 
-    -e end_time           is in the same form as start_time. Note that the
-                          final second is NOT included when used with the
-                          -T or -R options below. When used to dump data to
-                          file, the times are rounded up and down so that all
-                          frame files with the included times are dumped.
-			  Either this or a sequence of line-delimited start/end
-                          time pairs is REQUIRED.
+    -e end_time           is in the same form as start_time. Either this or a
+			  sequence of line-delimited start/end time pairs is
+                          REQUIRED.
 
-    -c channel_name
+    -c channel_name       a channel name, without trend extension or trend
+                          type included, e.g.
+                          H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
 
     -t trend_extensions   what type of statistics should be downloaded.
                           Accepts a trend extension
@@ -73,6 +73,32 @@ OPTIONS:
                           to output_directory/geco_trend_dump.d/channel_name.
 
     -h                    shows this message.
+
+EXAMPLES:
+
+    Dump max, mean, and min trends from the first day of 2016 of the time
+    difference between the aLIGO timing distribution system and the Hanford
+    Main Storage Room Cs-III cesium clock 1PPS signals into separate
+    subdirectories of ~/timediffs/geco_trend_dump.d:
+
+        geco_trend_dump \\
+                -s 'Jan 1 2016 GMT' \\
+                -e 'Jan 2 2016 GMT' \\
+                -t max,mean,min \\
+                -p ~/timediffs \\
+                -c H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
+
+    Get the same data for all operational segments at Hanford between Aug 1,
+    2015 and May 1, 2016, and save it to the default directory,
+    ~/geco_trend_dump.d:
+
+        geco_get_operational_segments \\
+                -s 'Aug 1 2015' \\
+                -e 'May 1 2016' \\
+                -o H
+            | geco_trend_dump \\
+                -t mean \\
+                -c H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
 
 USAGE
 }
@@ -122,12 +148,13 @@ run_nds_query () {
     local delta_t="${2}"
     local channel_name="${3}"
     local trend_extension="${4}"
+    log "running nds_query: $*"
     nds_query \
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
             -d "${delta_t}" \
             -v "${channel_name}.${trend_extension},${CHAN_TYPE}" \
-        && log "nds_query successful: $*"
+        && log "nds_query finished."
 }
 
 # reformat the output of an nds_query into a tabular format with time in the
@@ -157,7 +184,7 @@ dump_trend () {
     echo ${trend_extension} >> "${outfile}"
     printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
     # this dumps the tabularized data
-    run_nds_query "${gps_start_time}" "${delta_t}" \
+    timeout 120 run_nds_query "${gps_start_time}" "${delta_t}" \
             "${channel_name}" "${trend_extension}" \
         | tabularize_nds_query_result >> "${outfile}"
 }
@@ -172,9 +199,10 @@ concatenate_time_segments () {
         first_time_segment=""
     elif [ -z ${gps_start_time:+x} ] || [ -z ${gps_end_time:+x} ]; then
         echo "Must provide both start and stop times, or neither" >&2
+        usage
         exit 1
     else
-        first_time_segment="${gps_end_time} ${gps_start_time}"$'\n'
+        first_time_segment="${gps_start_time} ${gps_end_time}"$'\n'
     fi
     printf "${first_time_segment}" && cat -
 }
@@ -195,7 +223,7 @@ round_time_segments () {
 # split each segment into sub-segments of max-length 6 hours so that queries
 # aren't too long for nds to handle
 split_time_segments () {
-    while read gps_start_time gps_end_time leftover; do
+    while read gps_start_time gps_end_time rest_of_line; do
         next_epoch=$((gps_start_time / 6000 * 6000 + 6000))
         split_segment="${gps_start_time} "
         while [ ${next_epoch} -lt ${gps_end_time} ]; do
@@ -224,6 +252,37 @@ fork_process_for_each_trend_extension () {
     "
 }
 
+# read time segments from stdin and dump data for each
+dump_time_segments () {
+    local gps_start_time="${1}"
+    local gps_end_time="${2}"
+    local channel_name="${3}"
+    local trend_extensions="${4}"
+    local outdir_pre="${5}"
+    if [[ "${trend_extensions}" == *,* ]]; then
+        fork_process_for_each_trend_extension \
+            "${channel_name}" "${trend_extensions}"
+    else
+        # get output directory
+        outdir="$(get_outdir "${outdir_pre}" "${channel_name}")"
+        # make sure output directory exists
+        mkdir -p "${outdir}"
+        # read start/stop times and download data for each time segment
+        while read gps_start_time gps_end_time rest_of_line; do
+            if ! [ -z "${rest_of_line}" ]; then
+                printf "Error: time segments must consist only of start/stop "
+                printf "times separated by whitespace\n"
+                printf "and appearing on new lines.\n"
+                log "Error: Bad time segment:"
+                log "${gps_start_time} ${gps_end_time} ${rest_of_line}"
+                exit 1
+            fi
+            dump_trend "${gps_start_time}" "${gps_end_time}" \
+                "${channel_name}" "${trend_extensions}" "${outdir}"
+        done
+    fi
+}
+
 ##############################
 # GET OPTION FLAGS
 ##############################
@@ -234,7 +293,7 @@ end_time=""
 channel_name=""
 trend_extensions=""
 # DEFINE OPTION FLAGS BELOW
-while getopts ":s:e:t:p:h" opt; do
+while getopts ":s:e:t:p:c:h" opt; do
     case ${opt} in
 # HANDLE OPTION FLAGS HERE
         s)  start_time="${OPTARG}";;
@@ -242,9 +301,10 @@ while getopts ":s:e:t:p:h" opt; do
         c)  channel_name="${OPTARG}";;
         t)  trend_extensions="${OPTARG}";;
         p)  outdir_pre="${OPTARG}";;
-        h)  usage && exit;;
+        h)  usage; exit;;
         :)
             echo "Option -${OPTARG} requires an argument." >&2
+            usage
             exit 1
             ;;
         \?)
@@ -256,28 +316,29 @@ while getopts ":s:e:t:p:h" opt; do
 done
 shift $((OPTIND-1))
 # CONFIRM VALIDITY OF INPUT
-# make sure the trend extensions provided are valid
-check_trend_extensions="${trend_extensions}"
-for trend in $VALID_TREND_EXTENSIONS; do
-    check_trend_extensions=${check_trend_extensions/$trend/}
-done
-if sed '/^,*$/!q1' <<<"$trend_extensions"; then
-    printf "Error: trend_extensions must be picked from: " >&2
-    printf "$VALID_TREND_EXTENSIONS"'\n' >&2
+# start, end, channel_name, and trend_extensions are required
+if [ -z ${start_time:+x} ]; then
+    echo "Error: Must provide -s start_time." >&2
+    usage
+    exit 1
+elif [ -z ${end_time:+x} ]; then
+    echo "Error: Must provide -e end_time." >&2
+    usage
+    exit 1
+elif [ -z ${channel_name:+x} ]; then
+    echo "Error: Must provide -c channel_name" >&2
+    usage
+    exit 1
+elif [ -z ${trend_extensions:+x} ]; then
+    echo "Error: Must provide -t trend_extensions." >&2
+    usage
     exit 1
 fi
-# start, end, channel_name, and trend_extensions are required
-if [ -z ${start_time+x} ]; then
-    echo "Error: Must provide -s start_time." >&2
-    exit 1
-elif [ -z ${end_time+x} ]; then
-    echo "Error: Must provide -e end_time." >&2
-    exit 1
-elif [ -z ${channel_name+x} ]; then
-    echo "Error: Must provide -c channel_name" >&2
-    exit 1
-elif [ -z ${trend_extensions+x} ]; then
-    echo "Error: Must provide -t trend_extensions." >&2
+# make sure the trend extensions provided are valid
+if ! [[ ,"${trend_extensions}" == *(,${VALID_TREND_EXTENSIONS// /|,}) ]]; then
+    printf "Error: trend_extensions must be picked from: " >&2
+    printf "$VALID_TREND_EXTENSIONS"'\n' >&2
+    usage
     exit 1
 fi
 # get the gps times, in case the input was human-readable
@@ -286,6 +347,7 @@ gps_end_time=$(lalapps_tconvert -t ${end_time})
 # start must be before end
 if [ ${gps_end_time} -le ${gps_start_time} ]; then
     echo "Error: End time must be strictly greater than start time." >&2
+    usage
     exit 1
 fi
 
@@ -297,14 +359,5 @@ fi
 concatenate_time_segments "${gps_start_time}" "${gps_end_time}" \
     | round_time_segments \
     | split_time_segments \
-    | if [[ "${trend_extensions}" == *[,]* ]]; then
-        fork_process_for_each_trend_extension \
-            "${channel_name}" "${trend_extensions}"
-    else
-        # get output directory
-        outdir="$(get_outdir "${outdir_pre}" "${channel_name}")"
-        while read gps_start_time gps_end_time leftover; do
-            dump_trend "${gps_start_time}" "${gps_end_time}" \
-                "${channel_name}" "${trend_extensions}" "${outdir}"
-        done
-    fi
+    | dump_time_segments "${gps_start_time}" "${gps_end_time}" \
+        "${channel_name}" "${trend_extensions}" "${outdir_pre}"
