@@ -5,9 +5,9 @@
 
 set -o errexit
 set -o nounset
-set -o noclobber
+set -o noclobber # can be overridden with -f flag
 # print everything before executing; good for debugging, off by default
-set -o xtrace
+# set -o xtrace
 
 ##############################
 # HELP MESSAGE
@@ -72,6 +72,10 @@ OPTIONS:
     -p output_directory   defaults to ~/. Timeseries text files will be saved
                           to output_directory/geco_trend_dump.d/channel_name.
 
+    -f                    force dump. Will overwrite the output of previous
+                          invocations of geco_trend_dump and will overwrite
+                          existing files without complaint.
+
     -h                    shows this message.
 
 EXAMPLES:
@@ -114,6 +118,7 @@ CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
 LOGFILE=/dev/stderr           # by default, just log to STDERR
+EPOCH_LENGTH=6000
 
 ##############################
 # HELPER FUNCTIONS
@@ -149,12 +154,13 @@ run_nds_query () {
     local channel_name="${3}"
     local trend_extension="${4}"
     log "running nds_query: $*"
-    nds_query \
+    timeout 120 nds_query \
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
             -d "${delta_t}" \
             -v "${channel_name}.${trend_extension},${CHAN_TYPE}" \
-        && log "nds_query finished."
+        && log "nds_query finished." \
+        || ( [ $? -eq 124 ] && log "nds_query timed out." )
 }
 
 # reformat the output of an nds_query into a tabular format with time in the
@@ -177,20 +183,25 @@ dump_trend () {
     local channel_name="${3}"
     local trend_extension="${4}"
     local outdir="${5}"
-    local delta_t=$((gps_start_time - gps_end_time))
+    echo $gps_start_time >&2
+    echo $gps_end_time >&2
+    local delta_t=$((gps_end_time - gps_start_time))
+    echo $delta_t >&2
     local outfile="${outdir}/${gps_start_time}_to_${gps_end_time}.${trend_extension}.${CHAN_TYPE}.dat"
     # next three lines add a descriptive header to the file
     echo ${channel_name} > "${outfile}"
     echo ${trend_extension} >> "${outfile}"
     printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
     # this dumps the tabularized data
-    timeout 120 run_nds_query "${gps_start_time}" "${delta_t}" \
+    run_nds_query "${gps_start_time}" "${delta_t}" \
             "${channel_name}" "${trend_extension}" \
         | tabularize_nds_query_result >> "${outfile}"
 }
 
 # concatenate start/stop times specified using flags to the list of start/stop
 # times provided via stdin
+# see if we are getting stdin from a pipe
+[ -p /dev/fd/0 ] && stdin_from_pipe=true || stdin_from_pipe=false
 concatenate_time_segments () {
     local gps_start_time="${1}"
     local gps_end_time="${2}"
@@ -204,7 +215,8 @@ concatenate_time_segments () {
     else
         first_time_segment="${gps_start_time} ${gps_end_time}"$'\n'
     fi
-    printf "${first_time_segment}" && cat -
+    printf "${first_time_segment}"
+    "${stdin_from_pipe}" && cat -
 }
 
 # round the start/stop times to the nearest integer multiples of 60 (round
@@ -224,11 +236,12 @@ round_time_segments () {
 # aren't too long for nds to handle
 split_time_segments () {
     while read gps_start_time gps_end_time rest_of_line; do
-        next_epoch=$((gps_start_time / 6000 * 6000 + 6000))
+        next_epoch=$((gps_start_time / ${EPOCH_LENGTH}
+                      * ${EPOCH_LENGTH} + ${EPOCH_LENGTH}))
         split_segment="${gps_start_time} "
         while [ ${next_epoch} -lt ${gps_end_time} ]; do
             split_segment="${split_segment}${next_epoch}"$'\n'"${next_epoch} "
-            next_epoch=$((next_epoch + 6000))
+            next_epoch=$((next_epoch + ${EPOCH_LENGTH}))
         done
         split_segment="${split_segment}${gps_end_time}"
         echo "${split_segment}"
@@ -293,7 +306,7 @@ end_time=""
 channel_name=""
 trend_extensions=""
 # DEFINE OPTION FLAGS BELOW
-while getopts ":s:e:t:p:c:h" opt; do
+while getopts ":s:e:t:p:c:fh" opt; do
     case ${opt} in
 # HANDLE OPTION FLAGS HERE
         s)  start_time="${OPTARG}";;
@@ -301,6 +314,7 @@ while getopts ":s:e:t:p:c:h" opt; do
         c)  channel_name="${OPTARG}";;
         t)  trend_extensions="${OPTARG}";;
         p)  outdir_pre="${OPTARG}";;
+        f)  set +o noclobber;;
         h)  usage; exit;;
         :)
             echo "Option -${OPTARG} requires an argument." >&2
