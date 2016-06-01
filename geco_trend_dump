@@ -13,6 +13,9 @@ set -o noclobber # can be overridden with -f flag
 # HELP MESSAGE
 ##############################
 usage() {
+#     echo usage disabled
+# }
+# unsage() {
     cat <<USAGE
 Download minute trends for a given channel and dump them into tabular text
 files, where the first three lines are a header with the following information:
@@ -312,16 +315,31 @@ split_time_segments () {
 fork_process_for_each_trend_extension () {
     local channel_name="${1}"
     local trend_extensions="${2}"
-    # fork a subprocess for each trend_extension, executing geco_trend_dump
-    # for each one and feeding stdin from this process to each of the
-    # forked processes using tee.
-    eval "
-        tee $(
-            echo "${trend_extensions}" \
-                | tr , '\n' \
-                | sed "s/.*/>(geco_trend_dump -t & "${channel_name}") \\\\/"
-        ) >/dev/null
-    "
+    # check: are we using -f flag to force overwrites?
+    local _f="$("${force}" && echo '-f')"
+    # make a folder for the named PIPES
+    tmp_dir="$(mktemp -d)"
+    # add comma to the front of the list to make name substitutions easier
+    comma_trend_extensions=,"${trend_extensions}"
+    for te in ${trend_extensions//,/ }; do
+        mkfifo "${tmp_dir}/${te}"
+        geco_trend_dump \
+                -t "${te}" \
+                -c "${channel_name}" \
+                ${_f} <"${tmp_dir}/${te}" & p=$!
+        declare "pid_${te}=${p}"
+    done
+    # write STDIN to each named PIPE
+    tee ${comma_trend_extensions//,/ ${tmp_dir}/} >/dev/null
+    # delete PIPES     
+    rm -rf "${tmp_dir}"
+    # wait for subprocesses to complete
+    pids=$(
+        for pid in ${comma_trend_extensions// / pid_}; do
+            printf "${!pid} "
+        done
+    )
+    wait ${pids}
 }
 
 # read time segments from stdin and dump data for each
@@ -405,9 +423,27 @@ if ! [[ ,"${trend_extensions}" == *(,${VALID_TREND_EXTENSIONS// /|,}) ]]; then
     usage
     exit 1
 fi
-# get the gps times, in case the input was human-readable
-gps_start_time=$(lalapps_tconvert -t ${start_time})
-gps_end_time=$(lalapps_tconvert -t ${end_time})
+# cannot have multiple trend_extensions with -T flag specified
+if [[ "${trend_extensions}" == *,* ]] && "${print_timeseries_to_stdout}"; then
+    echo "Error: can only specify one trend_extension when using -T flag." >&2
+    usage
+    exit 1
+fi
+# get the gps times, in case the input was human-readable; if start/stop times
+# not provided with flags, they must be provided via STDIN
+if ! [ -z ${start_time:+x} ] && ! [ -z ${end_time:+x} ]; then
+    gps_start_time=$(lalapps_tconvert -t ${start_time})
+    gps_end_time=$(lalapps_tconvert -t ${end_time})
+elif ! "${stdin_from_pipe}"; then
+    echo "Error: must provide start/stop time either using -s and -e" >&2
+    echo "    flags, or by piping a line-delimited list of start/stop" >&2
+    echo "    times to STDIN." >&2
+    usage
+    exit 1
+else
+    gps_start_time=""
+    gps_end_time=""
+fi
 
 ##############################
 # MAIN BODY
