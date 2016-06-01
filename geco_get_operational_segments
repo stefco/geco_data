@@ -11,7 +11,7 @@ set -o errexit
 set -o nounset
 set -o noclobber
 # print everything before executing; good for debugging, off by default
-set -o xtrace
+# set -o xtrace
 
 #------------------------------------------------------------------------------
 # CONSTANTS
@@ -69,7 +69,7 @@ while getopts ":s:e:o:h" opt; do
         s)  start_time="${OPTARG}";;
         e)  end_time="${OPTARG}";;
         o)
-            if [[ "${observatory_prefix}" == @(H|L) ]]; then
+            if [[ "${OPTARG}" == @(H|L) ]]; then
                 observatory_prefix="${OPTARG}"
             else
                 echo "Error: ${OPTARG} is not a valid observatory_prefix." >&2
