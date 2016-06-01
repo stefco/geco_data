@@ -315,6 +315,7 @@ split_time_segments () {
 fork_process_for_each_trend_extension () {
     local channel_name="${1}"
     local trend_extensions="${2}"
+    local outdir_pre="${3}"
     # check: are we using -f flag to force overwrites?
     local _f="$("${force}" && echo '-f')"
     # make a folder for the named PIPES
@@ -326,6 +327,7 @@ fork_process_for_each_trend_extension () {
         geco_trend_dump \
                 -t "${te}" \
                 -c "${channel_name}" \
+                -p "${outdir_pre}" \
                 ${_f} <"${tmp_dir}/${te}" & p=$!
         declare "pid_${te}=${p}"
     done
@@ -351,7 +353,7 @@ dump_time_segments () {
     local outdir_pre="${5}"
     if [[ "${trend_extensions}" == *,* ]]; then
         fork_process_for_each_trend_extension \
-            "${channel_name}" "${trend_extensions}"
+            "${channel_name}" "${trend_extensions}" "${outdir_pre}"
     else
         # read start/stop times and download data for each time segment
         while read gps_start_time gps_end_time rest_of_line; do
@@ -366,6 +368,7 @@ dump_time_segments () {
             dump_trend "${gps_start_time}" "${gps_end_time}" \
                 "${channel_name}" "${trend_extensions}" "${outdir_pre}"
         done
+        log "Finished dumping ${channel_name}.${trend_extensions},${CHAN_TYPE}"
     fi
 }
 
