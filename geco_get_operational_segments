@@ -11,7 +11,7 @@ set -o errexit
 set -o nounset
 set -o noclobber
 # print everything before executing; good for debugging, off by default
-# set -o xtrace
+set -o xtrace
 
 #------------------------------------------------------------------------------
 # CONSTANTS
@@ -91,6 +91,21 @@ while getopts ":s:e:o:h" opt; do
     esac
 done
 shift $((OPTIND-1))
+# start_time, end_time, and observatory_prefix are required
+if [ -z ${start_time:+x} ]; then
+    echo "Error: Must provide -s start_time." >&2
+    usage
+    exit 1
+elif [ -z ${end_time:+x} ]; then
+    echo "Error: Must provide -e end_time." >&2
+    usage
+    exit 1
+elif [ -z ${observatory_prefix:+x} ]; then
+    echo "Error: Must provide -o observatory_prefix" >&2
+    usage
+    exit 1
+fi
+
 
 #------------------------------------------------------------------------------
 # MAIN BODY
