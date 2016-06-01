@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# bash script template by Stefan Countryman
-# TODO WRITE SCRIPT SUMMARY HERE
+#------------------------------------------------------------------------------
+# Stefan Countryman, 6/30/16
+# returns a two-column list of start/stop times for segments when a detector
+# was operational. useful for avoiding false alarm anomalies arising from e.g.
+# maintenance.
+#------------------------------------------------------------------------------
 
 set -o errexit
 set -o nounset
@@ -9,36 +13,74 @@ set -o noclobber
 # print everything before executing; good for debugging, off by default
 # set -o xtrace
 
-##############################
+#------------------------------------------------------------------------------
+# CONSTANTS
+#------------------------------------------------------------------------------
+
+FULL_SCRIPT_PATH="$(readlink -f "${0}")"
+SCRIPT_NAME="$(basename "${FULL_SCRIPT_PATH}")"
+LOGFILE=/dev/stderr # by default, just log to STDERR
+SEGMENT_URL='https://segments.ligo.org'
+SEG_CHAN_SANS_PREFIX='1:DMT-ANALYSIS_READY:1'
+
+#------------------------------------------------------------------------------
 # HELP MESSAGE
-##############################
-# TODO CUSTOMIZE OPTIONS
+#------------------------------------------------------------------------------
 usage() {
     cat <<USAGE
-USAGE: command_name_here [ OPTIONS ] ARGUMENTS ...
+USAGE: ${SCRIPT_NAME} -s start_time -e end_time -o observatory_prefix
 
-ARGUMENTS:
-
-    DESCRIBE ARGUMENTS HERE
+    Returns a two-column list of start/stop times for segments when a detector
+    was operational. Useful for avoiding false alarm anomalies arising from
+    maintenance, or just generally for finding when the detector was
+    operational.
 
 OPTIONS:
 
-    -h                    shows this message.
+    -s start_time           is in the form Sep 01 00:00:00 GMT 2015 (or any
+                            format recognizable by lalapps_tconvert), or is a
+                            gps time like 1125100817. REQUIRED.
+
+    -e end_time             is in the same form as start_time. REQUIRED.
+
+    -o observatory_prefix   H for Hanford or L for Livingston.
+
+    -h                      shows this message.
 
 USAGE
 }
 
-##############################
+#------------------------------------------------------------------------------
+# HELPER FUNCTIONS
+#------------------------------------------------------------------------------
+
+log () {
+    echo "$(date +'%D %H:%M:%S:') $*" >> "$LOGFILE"
+}
+
+#------------------------------------------------------------------------------
 # GET OPTION FLAGS
-##############################
-# TODO DEFINE OPTION VARIABLES HERE
-# TODO DEFINE OPTION FLAGS BELOW
-while getopts "h" opt; do
+#------------------------------------------------------------------------------
+start_time=""
+end_time=""
+observatory_prefix=""
+while getopts ":s:e:o:h" opt; do
     case ${opt} in
-# TODO HANDLE OPTION FLAGS HERE
-        h)  usage && exit;;
+        s)  start_time="${OPTARG}";;
+        e)  end_time="${OPTARG}";;
+        o)
+            if [[ "${observatory_prefix}" == @(H|L) ]]; then
+                observatory_prefix="${OPTARG}"
+            else
+                echo "Error: ${OPTARG} is not a valid observatory_prefix." >&2
+                usage
+                exit 1
+            fi
+            ;;
+        h)  usage; exit;;
         :)
             echo "Option -${OPTARG} requires an argument." >&2
+            usage
             exit 1
             ;;
         \?)
@@ -50,14 +92,18 @@ while getopts "h" opt; do
 done
 shift $((OPTIND-1))
 
-##############################
-# DEFINE HELPER FUNCTIONS
-##############################
-
-# TODO DEFINE HELPER FUNCTIONS
-
-##############################
+#------------------------------------------------------------------------------
 # MAIN BODY
-##############################
+#------------------------------------------------------------------------------
 
-# TODO ADD MAIN BODY BELOW
+ligolw_segment_query_dqsegdb \
+        --segment-url="${SEGMENT_URL}" \
+        --query-segments \
+        --include-segments "${observatory_prefix}${SEG_CHAN_SANS_PREFIX}" \
+        --gps-start-time $(lalapps_tconvert -t "${start_time}") \
+        --gps-end-time $(lalapps_tconvert -t "${end_time}") \
+    | ligolw_print \
+        -t segment:table \
+        -c start_time \
+        -c end_time \
+        -d " "
