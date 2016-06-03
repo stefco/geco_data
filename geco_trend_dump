@@ -110,7 +110,7 @@ EXAMPLES:
         geco_get_operational_segments \\
                 -s 'Aug 1 2015' \\
                 -e 'May 1 2016' \\
-                -o H
+                -o H \\
             | geco_trend_dump \\
                 -t mean \\
                 -c H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
@@ -195,7 +195,7 @@ tabularize_nds_query_result () {
     read
     read l
     n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
-    sed 's/ *[0-9]* *//;s/  */\'$'\n/g' \
+    sed 's/ *[0-9]* *//;s/  */'$'\\\n/g' \
         | awk '{printf "%d\t%s\n", (NR-1)*'"${SECONDS_PER_VAL}+${gps_start_time}"', $0}'
 }
 
