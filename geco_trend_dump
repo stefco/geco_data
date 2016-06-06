@@ -155,11 +155,11 @@ get_outfile () {
         # else is $outdir_pre/geco_trend_dump.d/channel_name
         if [ "$outdir_pre" == "" ]; then
             outdir="$HOME/geco_trend_dump.d/$(
-                printf "${channel_name}" | tr ':' '_'
+                printf "%s" "${channel_name}" | tr ':' '_'
             )"
         else
             outdir="${outdir_pre}/geco_trend_dump.d/$(
-                printf "${channel_name}" | tr ':' '_'
+                printf "%s" "${channel_name}" | tr ':' '_'
             )"
         fi
         # make sure output directory exists
@@ -207,7 +207,8 @@ dump_trend () {
     local trend_extension="${4}"
     local outdir_pre="${5}"
     local delta_t=$((gps_end_time - gps_start_time))
-    local outfile="$(get_outfile "${gps_start_time}" "${gps_end_time}" \
+    local outfile
+    outfile="$(get_outfile "${gps_start_time}" "${gps_end_time}" \
                     "${channel_name}" "${trend_extension}" "${outdir_pre}")"
     # delete the outfile (will fail if file exists and -f not specified)
     if ! "${print_timeseries_to_stdout}" && [ -e "${outfile}" ]; then
@@ -246,7 +247,7 @@ concatenate_time_segments () {
     else
         first_time_segment="${gps_start_time} ${gps_end_time}"$'\n'
     fi
-    printf "${first_time_segment}"
+    printf "%s" "${first_time_segment}"
     "${stdin_from_pipe}" && cat -
 }
 
@@ -317,7 +318,8 @@ fork_process_for_each_trend_extension () {
     local trend_extensions="${2}"
     local outdir_pre="${3}"
     # check: are we using -f flag to force overwrites?
-    local _f="$("${force}" && echo '-f')"
+    local _f
+    _f="$("${force}" && echo '-f')"
     # make a folder for the named PIPES
     tmp_dir="$(mktemp -d)"
     # add comma to the front of the list to make name substitutions easier
@@ -338,7 +340,7 @@ fork_process_for_each_trend_extension () {
     # wait for subprocesses to complete
     pids=$(
         for pid in ${comma_trend_extensions// / pid_}; do
-            printf "${!pid} "
+            printf "%s" "${!pid} "
         done
     )
     wait ${pids}
@@ -422,7 +424,7 @@ fi
 # make sure the trend extensions provided are valid
 if ! [[ ,"${trend_extensions}" == *(,${VALID_TREND_EXTENSIONS// /|,}) ]]; then
     printf "Error: trend_extensions must be picked from: " >&2
-    printf "$VALID_TREND_EXTENSIONS"'\n' >&2
+    printf "%s" "$VALID_TREND_EXTENSIONS"'\n' >&2
     usage
     exit 1
 fi
