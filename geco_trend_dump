@@ -189,12 +189,15 @@ run_nds_query () {
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second
 tabularize_nds_query_result () {
-    read l
+    # local n_values
+    local gps_start_time
+    read -r l
     gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
-    read
-    read
-    read l
-    n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
+    read -r
+    read -r
+    read -r l
+    # this next line is currently unused; might remove
+    # n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
     sed 's/ *[0-9]* *//;s/  */'$'\\\n/g' \
         | awk '{printf "%d\t%s\n", (NR-1)*'"${SECONDS_PER_VAL}+${gps_start_time}"', $0}'
 }
@@ -221,8 +224,8 @@ dump_trend () {
         fi
     fi
     # next three lines add a descriptive header to the file
-    echo ${channel_name} >> "${outfile}"
-    echo ${trend_extension} >> "${outfile}"
+    echo "${channel_name}" >> "${outfile}"
+    echo "${trend_extension}" >> "${outfile}"
     printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
     # this dumps the tabularized data
     run_nds_query "${gps_start_time}" "${delta_t}" \
@@ -255,7 +258,7 @@ concatenate_time_segments () {
 validate_time_segments () {
     # must have at least one line
     local lines=0
-    while read gps_start_time gps_end_time rest_of_line; do
+    while read -r gps_start_time gps_end_time rest_of_line; do
         lines=$((lines + 1))
         # start must be before end
         if [ ${gps_end_time} -le ${gps_start_time} ]; then
@@ -298,7 +301,7 @@ round_time_segments () {
 # split each segment into sub-segments of max-length 6 hours so that queries
 # aren't too long for nds to handle
 split_time_segments () {
-    while read gps_start_time gps_end_time rest_of_line; do
+    while read -r gps_start_time gps_end_time rest_of_line; do
         next_epoch=$((gps_start_time / ${MAX_TIME_INTERVAL}
                       * ${MAX_TIME_INTERVAL} + ${MAX_TIME_INTERVAL}))
         split_segment="${gps_start_time} "
@@ -358,7 +361,7 @@ dump_time_segments () {
             "${channel_name}" "${trend_extensions}" "${outdir_pre}"
     else
         # read start/stop times and download data for each time segment
-        while read gps_start_time gps_end_time rest_of_line; do
+        while read -r gps_start_time gps_end_time rest_of_line; do
             if ! [ -z "${rest_of_line}" ]; then
                 printf "Error: time segments must consist only of start/stop "
                 printf "times separated by whitespace\n"
