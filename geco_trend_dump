@@ -140,7 +140,7 @@ USAGE
 
 log () {
     tput setaf 2
-    printf '%s' "$(date +'%D %H:%M:%S:')"
+    printf '%s' "$(date +'%D %H:%M:%S:')" >> "$LOGFILE"
     tput sgr0
     printf '%s\n' " $*" >> "$LOGFILE"
 }
