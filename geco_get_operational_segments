@@ -43,7 +43,10 @@ OPTIONS:
 
     -e end_time             is in the same form as start_time. REQUIRED.
 
-    -o observatory_prefix   H for Hanford or L for Livingston.
+    -o observatory_prefix   H for Hanford or L for Livingston. Can be a full
+                            EPICS channel name as well; the first letter of
+                            the provided argument will be used to determine
+                            which observatory is intended. REQUIRED.
 
     -h                      shows this message.
 
@@ -63,15 +66,14 @@ log () {
 #------------------------------------------------------------------------------
 start_time=""
 end_time=""
-observatory_prefix=""
+declare -u observatory_prefix="" # convert to uppercase on assignment
 while getopts ":s:e:o:h" opt; do
     case ${opt} in
         s)  start_time="${OPTARG}";;
         e)  end_time="${OPTARG}";;
         o)
-            if [[ "${OPTARG}" == @(H|L) ]]; then
-                observatory_prefix="${OPTARG}"
-            else
+            observatory_prefix="${OPTARG:0:1}" # upcase due to above
+            if ! [[ "${observatory_prefix}" == @(H|L) ]]; then
                 echo "Error: ${OPTARG} is not a valid observatory_prefix." >&2
                 usage
                 exit 1
