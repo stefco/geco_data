@@ -21,7 +21,9 @@ VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
 FULL_SCRIPT_PATH="$(readlink -f "${0}")" # use to recursively call this script
 SCRIPT_NAME="$(basename "${FULL_SCRIPT_PATH}")"
-LOGFILE=/dev/stderr           # by default, just log to STDERR
+TIMEOUT=120
+LOGFILE=/dev/stderr           # by default, just log to STDERR. TODO move to
+                              # getopts section below since it gets overridden
 
 #------------------------------------------------------------------------------
 # HELP MESSAGE
@@ -191,7 +193,7 @@ run_nds_query () {
     local channel_name="${3}"
     local trend_extension="${4}"
     log "running nds_query: $*"
-    timeout 120 nds_query \
+    timeout "${TIMEOUT}" nds_query \
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
             -d "${delta_t}" \
