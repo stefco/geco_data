@@ -8,7 +8,12 @@ import argparse
 
 args = sys.argv
 if len(args) == 1 or args[1] == '-h':
-    print('This program takes two arguments: the first is the current correction to the frequency as read from the Monitor2 software on the IBM Thinkpad in the mainstorage room, and the second is the drift coefficient.')
+    print('This program takes two arguments:\n'
+          '1)  the current correction to the frequency as read from the\n'
+          '    Monitor2 software on the IBM Thinkpad in the mainstorage room\n'
+          '    (which is assumed to be in units of 1e-15, exactly as it\n'
+          '    appears in Monitor3), and \n'
+          '2)  the drift coefficient.')
     exit()
 elif len(args) != 3:
     print('This program takes exactly two arguments')
