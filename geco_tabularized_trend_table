@@ -36,6 +36,7 @@ include_outliers = args['i']
 # the same time. It will always be the case that min is in the 2nd column,
 # max in the 3rd, mean in the 4th, and rms in the 5th, and n in the 6th
 def make_data_table(trend_array):
+    current_trend = 'none'
     nan = float('nan')
     new_row = np.array([nan,nan,nan,nan,nan,nan])
     table = np.array([nan,nan,nan,nan,nan,nan])
@@ -43,26 +44,27 @@ def make_data_table(trend_array):
     for line in sys.stdin:
         if line.replace('\n','') in valid_trend_extensions:
             current_trend = line.replace('\n','')
-            current_column = trend_index_dictionary[line.replace('\n','')]
-        if current_trend in active_trend_extensions:
-            try:
-                values = [float(x) for x in line.split('\t')]
-                values[1] = values[1] * micros_per_second 
-                if is_array_1d(table):
-                    table[TIME_COLUMN] = values[0]
-                    table[current_column] = values[1]
-                    table = np.vstack((new_row, table))
-                else:
-                    times = table[:,0]
-                    if values[0] in times:
-                        table[np.where(times == values[0])[0], current_column]\
-                            = values[1]
+            current_column = trend_index_dictionary[current_trend]
+        if current_trend != 'none':
+            if current_trend in active_trend_extensions:
+                try:
+                    values = [float(x) for x in line.split('\t')]
+                    values[1] = values[1] * micros_per_second 
+                    if is_array_1d(table):
+                        table[TIME_COLUMN] = values[0]
+                        table[current_column] = values[1]
+                        table = np.vstack((new_row, table))
                     else:
-                        table[0,TIME_COLUMN] = values[0]
-                        table[0,current_column] = values[1]
-                        table = np.vstack((new_row, table)) 
-            except ValueError:
-                pass
+                        times = table[:,0]
+                        if values[0] in times:
+                            table[np.where(times == values[0])[0],\
+                                current_column]= values[1]
+                        else:
+                            table[0,TIME_COLUMN] = values[0]
+                            table[0,current_column] = values[1]
+                            table = np.vstack((new_row, table))
+                except ValueError:
+                    pass
         else:
             pass
     return table
@@ -94,9 +96,11 @@ def remove_anomalous_data(anomalous_dictionary, data_table):
     UPPER_LIMIT = args['max']
     EMPTY_ROW = np.array([0,0,0,0,0,0])
     n_delete = 0
+    active_indeces = [trend_index_dictionary[i] for i in
+                      active_trend_extensions]
     # this range is chosen only to check the min, mean, max, and rms columns
     for row in range(len(data_table[:,0])):
-        for column in range(1,5):
+        for column in active_indeces:
             if abs(data_table[row,column]) < LOWER_LIMIT:
                 anomalous[index_trend_dictionary[column]]['data too small']\
                     ['values'].append(data_table[row,column])
