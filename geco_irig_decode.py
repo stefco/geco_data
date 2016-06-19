@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import numpy as np
@@ -135,7 +135,7 @@ def get_date_from_timeseries(timeseries):
 
     # return datetime from this
     jan1 = datetime.datetime(tot_y, 1, 1, tot_h, tot_m, tot_s)
-    return jan1 + datetime.timedelta(tot_d - 1)
+    return jan1 + datetime.timedelta(int(tot_d) - 1)
 
 def print_formatted_date(converted_date):
     # finally, print the date
@@ -147,18 +147,18 @@ def print_formatted_date(converted_date):
 def read_1_second_from_stdin():
     # read in data from stdin; don't read more than a second worth of data
     timeseries = np.zeros(SAMPLE_RATE)
+    line = ''
     i = 0
     while i < SAMPLE_RATE:
-        try:
-            timeseries[i] = float(sys.stdin.readline())
-            i += 1
-        except (EOFError, ValueError) as e:
-            if (e.message == 'could not convert string to float: '
-                    or type(e) == EOFError) and i == 0: raise EOFError()
+        line = sys.stdin.readline()
+        if not line:
+            if i == 0:
+                raise EOFError('Hit EOF at end of a second.')
             else:
-                raise ValueError('Early termination of input. Only received '
-                                 + str(i+1) + ' samples out of '
-                                 + str(SAMPLE_RATE) + ' expected.')
+                raise ValueError('Hit EOF ' + str(i) + ' lines into second; '
+                                 'provide integer number of seconds of data.')
+        timeseries[i] = float(line)
+        i += 1
     return timeseries
 
 def main():
