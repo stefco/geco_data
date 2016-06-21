@@ -67,15 +67,16 @@ def make_data_table(trend_array):
                     pass
         else:
             pass
+    table = np.delete(table,0,0)
     return table
 
 # removes times from the table that do not have a complete set of min, mean,
 # max, and rms trends
 def remove_incomplete_times(data_table):
-    EMPTY_ROW = np.array([0,0,0,0,0,0])
+    inf = np.inf
+    EMPTY_ROW = np.array([inf,inf,inf,inf,inf,inf])
     n_delete = 0
     table_column_length = len(data_table[:,0])
-    # this range is chosen only to check the min, mean, max, and rms columns
     for row in range(table_column_length):
         active_indeces = [trend_index_dictionary[i] for
                           i in active_trend_extensions]
@@ -92,10 +93,12 @@ def remove_incomplete_times(data_table):
 # function works only tables that have been through remove_incomplete_times
 def remove_anomalous_data(anomalous_dictionary, data_table):
     anomalous = anomalous_dictionary
+    nan = float('nan')
+    n_delete = 0
+    was_anomalous_data = False
     LOWER_LIMIT = args['min']
     UPPER_LIMIT = args['max']
-    EMPTY_ROW = np.array([0,0,0,0,0,0])
-    n_delete = 0
+    EMPTY_ROW = np.array([nan,nan,nan,nan,nan,nan])
     active_indeces = [trend_index_dictionary[i] for i in
                       active_trend_extensions]
     # this range is chosen only to check the min, mean, max, and rms columns
@@ -108,7 +111,7 @@ def remove_anomalous_data(anomalous_dictionary, data_table):
                     ['times'].append(data_table[row,0])
                 data_table = np.delete(data_table,row,0)
                 data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete += 1
+                n_delete +=1
             elif abs(data_table[row,column]) > UPPER_LIMIT:
                 anomalous[index_trend_dictionary[column]]['data too large']\
                     ['values'].append(data_table[row,column])
@@ -116,7 +119,7 @@ def remove_anomalous_data(anomalous_dictionary, data_table):
                     ['times'].append(data_table[row,0])
                 data_table = np.delete(data_table,row,0)
                 data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete += 1
+                n_delete +=1
             elif data_table[row, column] == 0:
                 anomalous[index_trend_dictionary[column]]['system off']\
                     ['values'].append(data_table[row,column])
@@ -124,9 +127,9 @@ def remove_anomalous_data(anomalous_dictionary, data_table):
                     ['times'].append(data_table[row,0])
                 data_table = np.delete(data_table,row,0)
                 data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete += 1
+                n_delete +=1
     for i in range(n_delete):
-        data_table = np.delete(data_table,i,0)
+        data_table = np.delete(data_table,0,0)
     return (anomalous,data_table)
 
 # prints the data from the data table to tabularized standard out
@@ -135,7 +138,7 @@ def print_tabularized_data_to_stdout(data_table):
         for column in range(5):
             sys.stdout.write(str(data_table[row,column]) + '\t')
         sys.stdout.write(str(data_table[row,5]) + '\n')
-    sys.stdout.write('\n')
+#    sys.stdout.write('\n')
     
 
 # returns True if a numpy array is one dimensional
@@ -163,8 +166,8 @@ def tconvert(tstr=""):
 
 # returns a tuple of human readable start and end times of a NUMPY ARRAY
 def find_start_and_end_times(np_times_array):
-    start_time = tconvert(np.amin(np_times_array)).replace('?','')
-    end_time = tconvert(np.amax(np_times_array)).replace('?','')
+    start_time = tconvert(np.amin(np_times_array)).replace('\n','')
+    end_time = tconvert(np.amax(np_times_array)).replace('\n','')
     return (start_time, end_time)
 
 # prints an outfile with the anomalous data sorted by trend extension
@@ -192,9 +195,7 @@ def main(trend_extensions, anomalous_data_descriptions):
     data_table = make_data_table(trend_extensions)
     data_table = remove_incomplete_times(data_table)
     if not include_outliers:
-        data_table = remove_anomalous_data(anomalous_dictionary,data_table)[1]
-        anomalous_dictionary = remove_anomalous_data(anomalous_dictionary,\
-            data_table)[0]
+        anomalous_dictionary, data_table = remove_anomalous_data(anomalous_dictionary,data_table)
     start_time, end_time = find_start_and_end_times(data_table[:,0])
     if not include_outliers:
         make_anomalous_data_outfile(anomalous_dictionary, trend_extensions,
