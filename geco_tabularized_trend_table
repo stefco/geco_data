@@ -73,8 +73,8 @@ def make_data_table(trend_array):
 # removes times from the table that do not have a complete set of min, mean,
 # max, and rms trends
 def remove_incomplete_times(data_table):
-    inf = np.inf
-    EMPTY_ROW = np.array([inf,inf,inf,inf,inf,inf])
+    EMPTY_ROW = [0,0,0,0,0,0]
+    bad_indeces = []
     n_delete = 0
     table_column_length = len(data_table[:,0])
     for row in range(table_column_length):
@@ -82,54 +82,53 @@ def remove_incomplete_times(data_table):
                           i in active_trend_extensions]
         reduced_row  = np.take(data_table[row,:], active_indeces)
         if np.isnan(reduced_row).any():
-            data_table = np.delete(data_table,row,0)
-            data_table = np.vstack((EMPTY_ROW, data_table))
-            n_delete += 1
-    for i in range(n_delete):
+            bad_indeces.append(row)
+    bad_indeces = list(set(bad_indeces))
+    for i in bad_indeces:
+        data_table = np.delete(data_table,i,0)
+        data_table = np.vstack((EMPTY_ROW, data_table))
+    for i in range(len(bad_indeces)):
         data_table = np.delete(data_table,0,0)
     return data_table
 
 # removes data that is beyond preset limits for being anomalous. This
 # function works only tables that have been through remove_incomplete_times
 def remove_anomalous_data(anomalous_dictionary, data_table):
-    anomalous = anomalous_dictionary
-    nan = float('nan')
-    n_delete = 0
-    was_anomalous_data = False
     LOWER_LIMIT = args['min']
     UPPER_LIMIT = args['max']
-    EMPTY_ROW = np.array([nan,nan,nan,nan,nan,nan])
+    EMPTY_ROW = [0,0,0,0,0,0]
+    anomalous_indeces = []
+    anomalous = anomalous_dictionary
     active_indeces = [trend_index_dictionary[i] for i in
                       active_trend_extensions]
     # this range is chosen only to check the min, mean, max, and rms columns
     for row in range(len(data_table[:,0])):
         for column in active_indeces:
             if abs(data_table[row,column]) < LOWER_LIMIT:
+                print(data_table)
                 anomalous[index_trend_dictionary[column]]['data too small']\
                     ['values'].append(data_table[row,column])
                 anomalous[index_trend_dictionary[column]]['data too small']\
                     ['times'].append(data_table[row,0])
-                data_table = np.delete(data_table,row,0)
-                data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete +=1
+                anomalous_indeces.append(row)
             elif abs(data_table[row,column]) > UPPER_LIMIT:
                 anomalous[index_trend_dictionary[column]]['data too large']\
                     ['values'].append(data_table[row,column])
                 anomalous[index_trend_dictionary[column]]['data too large']\
                     ['times'].append(data_table[row,0])
-                data_table = np.delete(data_table,row,0)
-                data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete +=1
+                anomalous_indeces.append(row)
             elif data_table[row, column] == 0:
                 anomalous[index_trend_dictionary[column]]['system off']\
                     ['values'].append(data_table[row,column])
                 anomalous[index_trend_dictionary[column]]['system off']\
                     ['times'].append(data_table[row,0])
-                data_table = np.delete(data_table,row,0)
-                data_table = np.vstack((EMPTY_ROW, data_table))
-                n_delete +=1
-    for i in range(n_delete):
-        data_table = np.delete(data_table,0,0)
+                anomalous_indeces.append(row)
+        anomalous_indeces = list(set(anomalous_indeces))
+    for i in anomalous_indeces:
+        data_table = np.delete(data_table,i,0)
+        data_table = np.vstack((EMPTY_ROW, data_table))
+    for i in range(len(anomalous_indeces)):
+        data_table = np.delete(data_table, 0, 0)
     return (anomalous,data_table)
 
 # prints the data from the data table to tabularized standard out
