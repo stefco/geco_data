@@ -16,9 +16,8 @@ valid_trend_extensions = ['min','max','mean','rms','n']
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-t', help='Use this flag to specify which trends you will'\
-    +' will be feeding in. This can be used multiple times, but you must use '\
-    +'a new "-t" flag each time', action='append', required=True, choices=\
-    valid_trend_extensions)
+    +' will be feeding in. This can be used to specify multiple trends sepera '\
+    +'ted by commas', required=True)
 parser.add_argument('--min', help='The lower limit on the absolute value of'\
     +'the time difference before the data is considered anomalous. The'\
     +' default is 0.01', type=float, default=0.01)
@@ -29,7 +28,7 @@ parser.add_argument('-i', action='store_true', help='Include outliers. use th'\
     +'is flag if you want this program to ignore anomalously large or small d'\
     +'ata and plot all points')
 args = vars(parser.parse_args())
-active_trend_extensions = args['t']
+active_trend_extensions = args['t'].split(',')
 include_outliers = args['i']
 
 # makes a table of all the data from standard in. Rows are all for
@@ -105,7 +104,6 @@ def remove_anomalous_data(anomalous_dictionary, data_table):
     for row in range(len(data_table[:,0])):
         for column in active_indeces:
             if abs(data_table[row,column]) < LOWER_LIMIT:
-                print(data_table)
                 anomalous[index_trend_dictionary[column]]['data too small']\
                     ['values'].append(data_table[row,column])
                 anomalous[index_trend_dictionary[column]]['data too small']\
