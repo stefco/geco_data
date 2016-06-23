@@ -2,13 +2,8 @@
 
 import sys
 import numpy as np
-## import matplotlib
-## matplotlib.use('Agg')
-## import matplotlib.pyplot as plt
 import scipy.ndimage.filters as scf
 import datetime
-
-## TODO: remove cruft
 
 #-------------------------------------------------------------------------------
 # CONSTANTS
@@ -16,9 +11,6 @@ import datetime
 
 # max and min of histogram, and number of bins
 SAMPLE_RATE = 16384     # ADC sample rate
-## HIST_MAX = 5e4
-## HIST_MIN = -5e4
-## HIST_BINS = 128
 
 #---------------------------------------------------------------------------
 # IRIG-B RELATED CONSTANTS
@@ -141,8 +133,6 @@ def print_formatted_date(converted_date):
     # finally, print the date
     print(converted_date.strftime('%a %b %d %X %Y'))
 
-# throw an EOFError if end of file hit immediately (this just means no seconds
-# left and could be fine). but hitting EOF in the middle of a second is bad
 # and will cause a ValueError.
 def read_1_second_from_stdin():
     # read in data from stdin; don't read more than a second worth of data
@@ -172,22 +162,3 @@ def main():
 # run this if we are running from command line
 if __name__ == "__main__":
     main()
-
-#-------------------------------------------------------------------------------
-# CRUFT BELOW
-#-------------------------------------------------------------------------------
-
-## times = np.linspace(start=0, stop=1, num=SAMPLE_RATE, endpoint=False)
-
-## make histograms
-## hist, bin_edges = np.histogram(timeseries, bins=HIST_BINS,
-##                                range=(HIST_MIN, HIST_MAX))
-## filt_hist, filt_bin_edges = np.histogram(filt, bins=HIST_BINS,
-##                                          # range=(HIST_MIN, HIST_MAX))
-
-## get indices of most-occupied bins
-## hist_indices_in_ascending_order = np.argsort(hist)
-
-## plot
-## plt.bar(left=bin_edges[0:-1], height=hist, width=(HIST_MAX - HIST_MIN)/HIST_BINS)
-## plt.bar(left=filt_bin_edges[0:-1], height=filt_hist, width=(HIST_MAX - HIST_MIN)/HIST_BINS, color='r')
