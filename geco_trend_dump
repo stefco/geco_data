@@ -485,6 +485,11 @@ else
     gps_start_time=""
     gps_end_time=""
 fi
+# make sure valid kerberos credentials exist
+if [ "$(klist | sed -n 's/^.*principal: \([^@]*\)@.*$/\1/p')"  = "" ]; then
+    echo 'Error: No LIGO kerberos credentials found! Log in using kinit.' >&2
+    exit 1
+fi
 
 #------------------------------------------------------------------------------
 # MAIN BODY
