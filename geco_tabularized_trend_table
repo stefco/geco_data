@@ -18,9 +18,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-t', help='Use this flag to specify which trends you will'\
     +' will be feeding in. This can be used to specify multiple trends sepera '\
     +'ted by commas', required=True)
-parser.add_argument('--min', help='The lower limit on the absolute value of'\
-    +'the time difference before the data is considered anomalous. The'\
-    +' default is 0.01', type=float, default=0.01)
+parser.add_argument('--min', help='The lower limit on the absolute value of '\
+    +'the time difference for anomalous data This does not include a time '\
+    +'difference of 0 which is  another category of anomalous data. The defau'\
+    +'lt is 0.01', type=float, default=0.01)
 parser.add_argument('--max', help='The upper limit on the absolute value of'\
     +'the time difference before the data is considered anomalous. The'\
     +' default is 4', type=float, default=4)
@@ -41,8 +42,8 @@ def make_data_table(trend_array):
     table = np.array([nan,nan,nan,nan,nan,nan])
     TIME_COLUMN = 0
     for line in sys.stdin:
-        if line.replace('\n','') in valid_trend_extensions:
-            current_trend = line.replace('\n','')
+        if line.replace[0,-1] in valid_trend_extensions:
+            current_trend = line.replace[0,-1]
             current_column = trend_index_dictionary[current_trend]
         if current_trend != 'none':
             if current_trend in active_trend_extensions:
