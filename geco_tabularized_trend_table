@@ -42,15 +42,17 @@ def make_data_table(trend_array):
     table = np.array([nan,nan,nan,nan,nan,nan])
     TIME_COLUMN = 0
     for line in sys.stdin:
-        if line[0,-1] in valid_trend_extensions:
-            current_trend = line[0,-1]
+        if line[0:-1] in valid_trend_extensions:
+            current_trend = line[0:-1]
             current_column = trend_index_dictionary[current_trend]
         if current_trend != 'none':
             if current_trend in active_trend_extensions:
                 try:
                     values = [float(x) for x in line.split('\t')]
+                    print(values)
                     values[1] = values[1] * micros_per_second 
                     if is_array_1d(table):
+                        print(table)
                         table[TIME_COLUMN] = values[0]
                         table[current_column] = values[1]
                         table = np.vstack((new_row, table))
@@ -73,6 +75,7 @@ def make_data_table(trend_array):
 # removes times from the table that do not have a complete set of min, mean,
 # max, and rms trends
 def remove_incomplete_times(data_table):
+    print(data_table)
     EMPTY_ROW = [0,0,0,0,0,0]
     bad_indeces = []
     n_delete = 0
@@ -135,7 +138,7 @@ def print_tabularized_data_to_stdout(data_table):
     for row in range(len(data_table[:,0])):
         for column in range(5):
             sys.stdout.write(str(data_table[row,column]) + '\t')
-        sys.stdout.write(str(data_table[row,5]) + '\n')
+        sys.stdout.write(str(data_table[row,5]))
 #    sys.stdout.write('\n')
     
 
