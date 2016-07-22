@@ -7,7 +7,7 @@ set -o errexit
 set -o nounset
 set -o noclobber # can be overridden with -f flag
 # print everything before executing; good for debugging, off by default
-# set -o xtrace
+set -o xtrace
 
 #------------------------------------------------------------------------------
 # HELP MESSAGE
@@ -138,6 +138,22 @@ LOGFILE=/dev/stderr           # by default, just log to STDERR
 
 log () {
     echo "$(date +'%D %H:%M:%S:') $*" >> "$LOGFILE"
+}
+
+# exit and warn the user if their kerberos credentials have expired.
+check_for_expired_kerberos_credentials () {
+    expiration_time=$(
+        lalapps_tconvert -t "$(
+            klist \
+                | sed -n '/Expires/{n;p}' \
+                | awk '{print $3 " " $4}'
+        )"
+    )
+    current_time=$(lalapps_tconvert -t)
+    if [ ${expiration_time} -le ${current_time} ]; then
+        echo 'Error: Kerberos credentials expired. Refresh with kinit.' >&2
+        exit 1
+    fi
 }
 
 # get the path to the output directory based on channel name and path prefix
@@ -453,6 +469,7 @@ fi
 #------------------------------------------------------------------------------
 
 # see if we have multiple trend extensions; if so, fork multiple processes
+check_for_expired_kerberos_credentials
 concatenate_time_segments "${gps_start_time}" "${gps_end_time}" \
     | validate_time_segments \
     | round_time_segments \
