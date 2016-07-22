@@ -10,6 +10,22 @@ set -o noclobber # can be overridden with -f flag
 set -o xtrace
 
 #------------------------------------------------------------------------------
+# CONSTANTS
+#------------------------------------------------------------------------------
+
+# DEFINE CONSTANTS
+MAX_TIME_INTERVAL=21600       # 21600 seconds is 6 hours
+SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
+CHAN_TYPE='m-trend'           # Only use minute trends for now
+VALID_TREND_EXTENSIONS="mean min max n rms"
+NDS_SERVER='nds.ligo.caltech.edu'
+FULL_SCRIPT_PATH="$(readlink -f "${0}")" # use to recursively call this script
+SCRIPT_NAME="$(basename "${FULL_SCRIPT_PATH}")"
+TIMEOUT=120
+LOGFILE=/dev/stderr           # by default, just log to STDERR. TODO move to
+                              # getopts section below since it gets overridden
+
+#------------------------------------------------------------------------------
 # HELP MESSAGE
 #------------------------------------------------------------------------------
 usage() {
@@ -29,7 +45,7 @@ And the remaining lines are data, formatted as follows:
     - First column is the time column
     - Second column is the channel value column
 
-USAGE: geco_trend_dump [ -p output_directory ] -s start_time -e end_time -t trend_extensions -c channel_name
+USAGE: ${SCRIPT_NAME} [ -p output_directory ] -s start_time -e end_time -t trend_extensions -c channel_name
 
 ARGUMENTS:
 
@@ -73,10 +89,10 @@ OPTIONS:
                           rms and mean values.) This option is REQUIRED.
 
     -p output_directory   defaults to ~/. Timeseries text files will be saved
-                          to output_directory/geco_trend_dump.d/channel_name.
+                          to output_directory/${SCRIPT_NAME}.d/channel_name.
 
     -f                    force dump. Will overwrite the output of previous
-                          invocations of geco_trend_dump and will overwrite
+                          invocations of ${SCRIPT_NAME} and will overwrite
                           existing files without complaint.
 
     -T                    write dumped data to STDOUT instead of saving it to
@@ -94,9 +110,9 @@ EXAMPLES:
     Dump max, mean, and min trends from the first day of 2016 of the time
     difference between the aLIGO timing distribution system and the Hanford
     Main Storage Room Cs-III cesium clock 1PPS signals into separate
-    subdirectories of ~/timediffs/geco_trend_dump.d:
+    subdirectories of ~/timediffs/${SCRIPT_NAME}.d:
 
-        geco_trend_dump \\
+        ${SCRIPT_NAME} \\
                 -s 'Jan 1 2016 GMT' \\
                 -e 'Jan 2 2016 GMT' \\
                 -t max,mean,min \\
@@ -105,30 +121,18 @@ EXAMPLES:
 
     Get the same data for all operational segments at Hanford between Aug 1,
     2015 and May 1, 2016, and save it to the default directory,
-    ~/geco_trend_dump.d:
+    ~/${SCRIPT_NAME}.d:
 
         geco_get_operational_segments \\
                 -s 'Aug 1 2015' \\
                 -e 'May 1 2016' \\
                 -o H \\
-            | geco_trend_dump \\
+            | ${SCRIPT_NAME} \\
                 -t mean \\
                 -c H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1
 
 USAGE
 }
-
-#------------------------------------------------------------------------------
-# CONSTANTS
-#------------------------------------------------------------------------------
-
-# DEFINE CONSTANTS
-MAX_TIME_INTERVAL=21600       # 21600 seconds is 6 hours
-SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
-CHAN_TYPE='m-trend'           # Only use minute trends for now
-VALID_TREND_EXTENSIONS="mean min max n rms"
-NDS_SERVER='nds.ligo.caltech.edu'
-LOGFILE=/dev/stderr           # by default, just log to STDERR
 
 #------------------------------------------------------------------------------
 # HELPER FUNCTIONS
@@ -137,7 +141,19 @@ LOGFILE=/dev/stderr           # by default, just log to STDERR
 # DEFINE HELPER FUNCTIONS
 
 log () {
-    echo "$(date +'%D %H:%M:%S:') $*" >> "$LOGFILE"
+    tput setaf 2
+    printf '%s' "$(date +'%D %H:%M:%S:')" >> "$LOGFILE"
+    tput sgr0
+    printf '%s\n' " $*" >> "$LOGFILE"
+}
+
+die () {
+    log "$*"
+    exit 111
+}
+
+try () {
+    "$@" || die "Invalid: $*"
 }
 
 # exit and warn the user if their kerberos credentials have expired.
@@ -167,15 +183,15 @@ get_outfile () {
     if "${print_timeseries_to_stdout}"; then
         local outfile="/dev/stdout"
     else
-        # default output directory is ~/geco_trend_dump.d/channel_name;
-        # else is $outdir_pre/geco_trend_dump.d/channel_name
+        # default output directory is ~/${SCRIPT_NAME}.d/channel_name;
+        # else is $outdir_pre/${SCRIPT_NAME}.d/channel_name
         if [ "$outdir_pre" == "" ]; then
-            outdir="$HOME/geco_trend_dump.d/$(
-                printf "${channel_name}" | tr ':' '_'
+            outdir="$HOME/${SCRIPT_NAME}.d/$(
+                printf "%s" "${channel_name}" | tr ':' '_'
             )"
         else
-            outdir="${outdir_pre}/geco_trend_dump.d/$(
-                printf "${channel_name}" | tr ':' '_'
+            outdir="${outdir_pre}/${SCRIPT_NAME}.d/$(
+                printf "%s" "${channel_name}" | tr ':' '_'
             )"
         fi
         # make sure output directory exists
@@ -193,24 +209,25 @@ run_nds_query () {
     local channel_name="${3}"
     local trend_extension="${4}"
     log "running nds_query: $*"
-    timeout 120 nds_query \
+    timeout "${TIMEOUT}" nds_query \
             -n "${NDS_SERVER}" \
             -s "${gps_start_time}" \
             -d "${delta_t}" \
-            -v "${channel_name}.${trend_extension},${CHAN_TYPE}" \
-        && log "nds_query finished." \
-        || ( [ $? -eq 124 ] && log "nds_query timed out." )
+            -v "${channel_name}.${trend_extension},${CHAN_TYPE}"
 }
 
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second
 tabularize_nds_query_result () {
-    read l
+    # local n_values
+    local gps_start_time
+    read -r l
     gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
-    read
-    read
-    read l
-    n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
+    read -r
+    read -r
+    read -r l
+    # this next line is currently unused; might remove
+    # n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
     sed 's/ *[0-9]* *//;s/  */'$'\\\n/g' \
         | awk '{printf "%d\t%s\n", (NR-1)*'"${SECONDS_PER_VAL}+${gps_start_time}"', $0}'
 }
@@ -223,26 +240,38 @@ dump_trend () {
     local trend_extension="${4}"
     local outdir_pre="${5}"
     local delta_t=$((gps_end_time - gps_start_time))
-    local outfile="$(get_outfile "${gps_start_time}" "${gps_end_time}" \
+    local outfile
+    outfile="$(get_outfile "${gps_start_time}" "${gps_end_time}" \
                     "${channel_name}" "${trend_extension}" "${outdir_pre}")"
-    # delete the outfile (will fail if file exists and -f not specified)
-    if ! "${print_timeseries_to_stdout}" && [ -e "${outfile}" ]; then
-        if "${force}"; then
-            rm -f "${outfile}"
+    # temporary file. save dump to this tempfile, then rename it to the
+    # outfile once the dump is finished to make the dump atomic.
+    tmp="$(mktemp)"
+    # if the output file already exists, keep moving; otherwise, run query
+    if ! [ -e "${outfile}" ]; then
+        # next three lines add a descriptive header to the file
+        echo "${channel_name}" >> "${tmp}"
+        echo "${trend_extension}" >> "${tmp}"
+        printf 'GPS-TIME\tTREND-VALUE\n' >> "${tmp}"
+        # this dumps the tabularized data
+        run_nds_query "${gps_start_time}" "${delta_t}" \
+                "${channel_name}" "${trend_extension}" \
+            | tabularize_nds_query_result >> "${tmp}"
+        query_status="${PIPESTATUS[0]}"
+        # an exit code of 124 on the query indicates the request timed out
+        if [ "${query_status}" -eq 0 ]; then
+            mv "${tmp}" "${outfile}"
+            msg="nds_query succeeded: ${gps_start_time} ${delta_t} "
+            msg+="${channel_name} ${trend_extension}"
+            log "${msg}"
+        elif [ "${query_status}" -eq 124 ]; then
+            touch "${outfile}".timed_out
+            msg="nds_query timed out: ${gps_start_time} ${delta_t} "
+            msg+="${channel_name} ${trend_extension}"
+            log "${msg}"
         else
-            echo "Error: must specify -f flag to overwrite existing files" >&2
-            usage
-            exit 1
+            echo "Error: run_nds_query returned ${query_status}" >&2
         fi
     fi
-    # next three lines add a descriptive header to the file
-    echo ${channel_name} >> "${outfile}"
-    echo ${trend_extension} >> "${outfile}"
-    printf 'GPS-TIME\tTREND-VALUE\n' >> "${outfile}"
-    # this dumps the tabularized data
-    run_nds_query "${gps_start_time}" "${delta_t}" \
-            "${channel_name}" "${trend_extension}" \
-        | tabularize_nds_query_result >> "${outfile}"
 }
 
 # concatenate start/stop times specified using flags to the list of start/stop
@@ -262,7 +291,7 @@ concatenate_time_segments () {
     else
         first_time_segment="${gps_start_time} ${gps_end_time}"$'\n'
     fi
-    printf "${first_time_segment}"
+    printf "%s" "${first_time_segment}"
     "${stdin_from_pipe}" && cat -
 }
 
@@ -270,7 +299,7 @@ concatenate_time_segments () {
 validate_time_segments () {
     # must have at least one line
     local lines=0
-    while read gps_start_time gps_end_time rest_of_line; do
+    while read -r gps_start_time gps_end_time rest_of_line; do
         lines=$((lines + 1))
         # start must be before end
         if [ ${gps_end_time} -le ${gps_start_time} ]; then
@@ -313,7 +342,7 @@ round_time_segments () {
 # split each segment into sub-segments of max-length 6 hours so that queries
 # aren't too long for nds to handle
 split_time_segments () {
-    while read gps_start_time gps_end_time rest_of_line; do
+    while read -r gps_start_time gps_end_time rest_of_line; do
         next_epoch=$((gps_start_time / ${MAX_TIME_INTERVAL}
                       * ${MAX_TIME_INTERVAL} + ${MAX_TIME_INTERVAL}))
         split_segment="${gps_start_time} "
@@ -333,14 +362,15 @@ fork_process_for_each_trend_extension () {
     local trend_extensions="${2}"
     local outdir_pre="${3}"
     # check: are we using -f flag to force overwrites?
-    local _f="$("${force}" && echo '-f')"
+    local _f
+    _f="$(("${force}" && echo '-f') || true)"
     # make a folder for the named PIPES
     tmp_dir="$(mktemp -d)"
     # add comma to the front of the list to make name substitutions easier
     comma_trend_extensions=,"${trend_extensions}"
     for te in ${trend_extensions//,/ }; do
         mkfifo "${tmp_dir}/${te}"
-        geco_trend_dump \
+        "${FULL_SCRIPT_PATH}" \
                 -t "${te}" \
                 -c "${channel_name}" \
                 -p "${outdir_pre}" \
@@ -353,8 +383,9 @@ fork_process_for_each_trend_extension () {
     rm -rf "${tmp_dir}"
     # wait for subprocesses to complete
     pids=$(
-        for pid in ${comma_trend_extensions// / pid_}; do
-            printf "${!pid} "
+        for pid in ${comma_trend_extensions//,/ pid_}; do
+            # echo pid is: "${pid}" >&2
+            printf "%s" "${!pid} "
         done
     )
     wait ${pids}
@@ -362,17 +393,21 @@ fork_process_for_each_trend_extension () {
 
 # read time segments from stdin and dump data for each
 dump_time_segments () {
-    local gps_start_time="${1}"
-    local gps_end_time="${2}"
-    local channel_name="${3}"
-    local trend_extensions="${4}"
-    local outdir_pre="${5}"
+    local channel_name="${1}"
+    local trend_extensions="${2}"
+    local outdir_pre="${3}"
+    msg='Starting new dump:'
+    msg+=$'\n'"    CHANNEL_NAME: ${channel_name}"
+    msg+=$'\n'"    TREND_EXTENSIONS: ${trend_extensions}"
+    msg+=$'\n'"    OUTDIR_PRE: ${outdir_pre}"
+    log "${msg}"
     if [[ "${trend_extensions}" == *,* ]]; then
+        log 'Forking a process for each trend extension.'
         fork_process_for_each_trend_extension \
             "${channel_name}" "${trend_extensions}" "${outdir_pre}"
     else
         # read start/stop times and download data for each time segment
-        while read gps_start_time gps_end_time rest_of_line; do
+        while read -r gps_start_time gps_end_time rest_of_line; do
             if ! [ -z "${rest_of_line}" ]; then
                 printf "Error: time segments must consist only of start/stop "
                 printf "times separated by whitespace\n"
@@ -392,7 +427,7 @@ dump_time_segments () {
 # GET OPTION FLAGS
 #------------------------------------------------------------------------------
 # DEFINE OPTION VARIABLES HERE
-outdir_pre=""
+outdir_pre="$HOME"
 start_time=""
 end_time=""
 channel_name=""
@@ -425,6 +460,9 @@ while getopts ":s:e:t:p:c:fTh" opt; do
 done
 shift $((OPTIND-1))
 # CONFIRM VALIDITY OF INPUT
+# write to a log file in our output directory rather than STDERR
+mkdir -p "${outdir_pre}"
+LOGFILE="${outdir_pre}"/"${SCRIPT_NAME}".log
 # channel_name and trend_extensions are required
 if [ -z ${channel_name:+x} ]; then
     echo "Error: Must provide -c channel_name" >&2
@@ -438,7 +476,7 @@ fi
 # make sure the trend extensions provided are valid
 if ! [[ ,"${trend_extensions}" == *(,${VALID_TREND_EXTENSIONS// /|,}) ]]; then
     printf "Error: trend_extensions must be picked from: " >&2
-    printf "$VALID_TREND_EXTENSIONS"'\n' >&2
+    printf "%s" "$VALID_TREND_EXTENSIONS"'\n' >&2
     usage
     exit 1
 fi
@@ -463,6 +501,11 @@ else
     gps_start_time=""
     gps_end_time=""
 fi
+# make sure valid kerberos credentials exist
+if [ "$(klist | sed -n 's/^.*principal: \([^@]*\)@.*$/\1/p')"  = "" ]; then
+    echo 'Error: No LIGO kerberos credentials found! Log in using kinit.' >&2
+    exit 1
+fi
 
 #------------------------------------------------------------------------------
 # MAIN BODY
@@ -474,5 +517,4 @@ concatenate_time_segments "${gps_start_time}" "${gps_end_time}" \
     | validate_time_segments \
     | round_time_segments \
     | split_time_segments \
-    | dump_time_segments "${gps_start_time}" "${gps_end_time}" \
-        "${channel_name}" "${trend_extensions}" "${outdir_pre}"
+    | dump_time_segments "${channel_name}" "${trend_extensions}" "${outdir_pre}"

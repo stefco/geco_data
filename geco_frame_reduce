@@ -1,0 +1,166 @@
+#!/bin/bash
+
+#------------------------------------------------------------------------------
+# bash script template by Stefan Countryman
+# fill in the blanks as you go, crossing out todos as you finish them
+# check your code for common mistakes with ShellCheck linter!
+# browser-based: http://www.shellcheck.net/#
+# install: https://github.com/koalaman/shellcheck#user-content-installing
+# Use FrCopy to produce frame files with a reduced channel list for download
+# to GECo server.
+#------------------------------------------------------------------------------
+
+set -o errexit
+set -o nounset
+set -o noclobber
+# Uncomment if you want failures in pipelines to exit the script (when
+# combined with errexit)
+# set -o pipefail
+# print everything before executing; good for debugging, off by default
+# set -o xtrace
+
+#------------------------------------------------------------------------------
+# CONSTANTS
+#------------------------------------------------------------------------------
+
+FULL_SCRIPT_PATH="$(readlink -f "${0}")"
+SCRIPT_NAME="$(basename "${FULL_SCRIPT_PATH}")"
+LOGFILE=/dev/stderr # by default, just log to STDERR
+DEFAULT_OUTDIR_PREFIX="$HOME"
+OUTDIR="${SCRIPT_NAME}".d
+VERSION=0.0
+SHARED_CHANNELS_SANS_PREFIX=(
+)
+    
+
+#------------------------------------------------------------------------------
+# HELP MESSAGE
+#------------------------------------------------------------------------------
+usage() {
+    cat <<USAGE
+USAGE: ${SCRIPT_NAME} [ -hV ] -s start_time -e end_time -d L|H [ -p outdir_pre ]
+
+Uses FrCopy to create Gravitational Wave Frame files containing only timing
+channels for reduced disk footprint. Used for archiving timing data in the
+standard GWF format.
+
+OPTIONS:
+
+    -s                  start time for frame file. REQUIRED.
+
+    -e                  end time for frae files. REQUIRED.
+
+    -d                  detector prefix. Either L or H for Livingston or
+                        Hanford, respectively. The channels to be included in
+                        the reduced frame are unique to each site. REQUIRED.
+
+    -p                  output directory prefix. Defaults to ~/ Output files
+                        will be saved to <outdir_prefix>/${SCRIPT_NAME}.d
+
+    -V                  print version number and exit.
+
+    -h                  print this message and exit.
+
+USAGE
+}
+
+#------------------------------------------------------------------------------
+# HELPER FUNCTIONS
+#------------------------------------------------------------------------------
+
+# TODO: DEFINE HELPER FUNCTIONS
+log () {
+    echo "$(date +'%D %H:%M:%S:') $*" >> "$LOGFILE"
+}
+
+die () {
+    log "$*"
+    exit 111
+}
+
+try () {
+    "$@" || die "Invalid: $*"
+}
+
+# get the path to a frame file for observatory H or L for some time
+get_frame_file_path () {
+    observatory_prefix="${1}"
+    current_time="${2}"
+    gw_data_find -o ${observatory_prefix} \
+                 -t ${observatory_prefix}1_R \
+                 -s ${current_time} \
+                 -e ${current_time} \
+                 -u file \
+        | sed 's/[^:^\/]*:\/\/[^\/]*//'
+}
+
+# make a reduced frame file for a specific time
+save_reduced_file () {
+    observatory_prefix="${1}"
+    gps_time="${2}"
+    outdir="${3}"
+    FrCopy \
+        -i "$(get_frame_file_path "${observatory_prefix}" "${gps_time}")" \
+        -o "${outdir}"/TIMING-"${gps_time}"-64.gwf \
+        -a ${SHARED_CHANNELS_SANS_PREFIX[@]/#/$observatory_prefix}
+}
+
+#------------------------------------------------------------------------------
+# GET OPTION FLAGS
+#------------------------------------------------------------------------------
+outdir_pre="${DEFAULT_OUTDIR_PREFIX}"
+start_time=""
+end_time=""
+detector=""
+while getopts ":s:e:d:p:Vh" opt; do
+    case ${opt} in
+        s)  start_time="${OPTARG}";;
+        e)  end_time="${OPTARG}";;
+        d)  detector="${OPTARG}";;
+        p)  outdir_pre="${OPTARG}";;
+        V)  echo version: $VERSION; exit;;
+        h)  usage; exit;;
+        :)
+            echo "Option -${OPTARG} requires an argument." >&2
+            usage
+            exit 1
+            ;;
+        \?)
+            echo "Invalid option: -${OPTARG}" >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+gps_start_time=$(lalapps_tconvert -t ${start_time})
+gps_end_time=$(lalapps_tconvert -t ${end_time})
+if [ "${start_time}" == "" ]; then
+    echo "Error: Must provide start time with -s flag." >&2
+    usage
+    exit 1
+elif [ "${end_time}" == "" ]; then
+    echo "Error: Must provide end time with -e flag." >&2
+    usage
+    exit 1
+elif [ "${detector}" == "" ]; then
+    echo "Error: Must provide detector prefix with -d flag." >&2
+    usage
+    exit 1
+fi
+if [ ${gps_start_time} -gt ${gps_end_time} ]; then
+    echo "Error: start time cannot come after end time." >&2
+    usage
+    exit 1
+fi
+# make sure valid kerberos credentials exist
+if [ "$(klist | sed -n 's/^.*principal: \([^@]*\)@.*$/\1/p')"  = "" ]; then
+    echo 'Error: No LIGO kerberos credentials found! Log in using kinit.' >&2
+    exit 1
+fi
+
+#------------------------------------------------------------------------------
+# MAIN BODY
+#------------------------------------------------------------------------------
+
+# TODO: ADD MAIN BODY BELOW
