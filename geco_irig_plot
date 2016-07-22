@@ -11,6 +11,7 @@ import time
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import geco_irig_decode
 
 # the number of subdivisions fo the final plot
 num_subdivs = 5
@@ -80,7 +81,10 @@ for plot_num in range(0, num_subdivs):
              timeseries[ bitrate * plot_num // num_subdivs : bitrate * (plot_num+1) // num_subdivs ],
              'k')
 # add title and so on
-plt.suptitle("One Second of IRIG-B Signal" + detector_name)
+decoded_time = geco_irig_decode.get_date_from_timeseries(timeseries)
+decoded_time_str = decoded_time.strftime('%a %b %d %X %Y')
+plt.suptitle("One Second of IRIG-B Signal" + detector_name + '\n'
+             + "at decoded GPS time: " + decoded_time_str)
 plt.xlabel("Time since start of second [$s$]")
 # plt.ylabel("IRIG-B Signal")
 # print("saving plot")

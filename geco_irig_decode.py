@@ -2,7 +2,7 @@
 
 import sys
 import numpy as np
-import scipy.ndimage.filters as scf
+# import scipy.ndimage.filters as scf
 import datetime
 
 #-------------------------------------------------------------------------------
@@ -100,10 +100,11 @@ def get_date_from_timeseries(timeseries):
     # MAIN
     #---------------------------------------------------------------------------
     # filter the timeseries to remove ringing at corners
-    filt = scf.gaussian_filter1d(timeseries, CONVOLUTION_SIGMA * SAMPLE_RATE)
+    # filt = scf.gaussian_filter1d(timeseries, CONVOLUTION_SIGMA * SAMPLE_RATE)
 
     # check all test points
-    bits_high = (filt[ALL_TEST_POINT_INDICES] >= HIGH_SIGNAL_THRESHOLD).astype(int)
+    # bits_high = (filt[ALL_TEST_POINT_INDICES] >= HIGH_SIGNAL_THRESHOLD).astype(int)
+    bits_high = (timeseries[ALL_TEST_POINT_INDICES] >= HIGH_SIGNAL_THRESHOLD).astype(int)
 
     # represent control bits with the number 2
     bits = np.zeros(BITS_PER_SECOND, dtype=int)
