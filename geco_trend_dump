@@ -16,6 +16,7 @@ set -o xtrace
 # DEFINE CONSTANTS
 MAX_TIME_INTERVAL=21600       # 21600 seconds is 6 hours
 SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
+#TODO: refactor; CHAN_TYPE is no longer a constant.
 CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
@@ -90,6 +91,9 @@ OPTIONS:
 
     -p output_directory   defaults to ~/. Timeseries text files will be saved
                           to output_directory/${SCRIPT_NAME}.d/channel_name.
+
+    -r trend_type         defaults to "m" for m-trend. Can also be "s" for
+                          s-trend.
 
     -f                    force dump. Will overwrite the output of previous
                           invocations of ${SCRIPT_NAME} and will overwrite
@@ -399,6 +403,7 @@ dump_time_segments () {
     msg='Starting new dump:'
     msg+=$'\n'"    CHANNEL_NAME: ${channel_name}"
     msg+=$'\n'"    TREND_EXTENSIONS: ${trend_extensions}"
+    msg+=$'\n'"    CHAN_TYPE: ${CHAN_TYPE}"
     msg+=$'\n'"    OUTDIR_PRE: ${outdir_pre}"
     log "${msg}"
     if [[ "${trend_extensions}" == *,* ]]; then
@@ -435,7 +440,7 @@ trend_extensions=""
 force=false
 print_timeseries_to_stdout=false
 # DEFINE OPTION FLAGS BELOW
-while getopts ":s:e:t:p:c:fTh" opt; do
+while getopts ":s:e:t:p:c:r:fTh" opt; do
     case ${opt} in
 # HANDLE OPTION FLAGS HERE
         s)  start_time="${OPTARG}";;
@@ -443,6 +448,7 @@ while getopts ":s:e:t:p:c:fTh" opt; do
         c)  channel_name="${OPTARG}";;
         t)  trend_extensions="${OPTARG}";;
         p)  outdir_pre="${OPTARG}";;
+        r)  CHAN_TYPE="${OPTARG}"-trend;;
         f)  set +o noclobber && force=true;;
         T)  print_timeseries_to_stdout=true;;
         h)  usage; exit;;
