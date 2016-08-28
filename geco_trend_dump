@@ -7,7 +7,7 @@ set -o errexit
 set -o nounset
 set -o noclobber # can be overridden with -f flag
 # print everything before executing; good for debugging, off by default
-set -o xtrace
+# set -o xtrace
 
 #------------------------------------------------------------------------------
 # CONSTANTS
@@ -20,11 +20,11 @@ SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
 CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
-pushd `dirname ${0}` > /dev/null
-SCRIPT_DIR=`pwd -P`
+pushd "`dirname ${0}`" > /dev/null
+SCRIPT_DIR="`pwd -P`"
 popd > /dev/null
 SCRIPT_NAME="$(basename "$0")"
-FULL_SCRIPT_PATH="${SCRIPT_DIR}/$(SCRIPT_NAME)"
+FULL_SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_NAME}"
 TIMEOUT=120
 LOGFILE=/dev/stderr           # by default, just log to STDERR. TODO move to
                               # getopts section below since it gets overridden
@@ -49,7 +49,7 @@ And the remaining lines are data, formatted as follows:
     - First column is the time column
     - Second column is the channel value column
 
-USAGE: ${SCRIPT_NAME} [ -p output_directory ] -s start_time -e end_time -t trend_extensions -c channel_name
+USAGE: ${SCRIPT_NAME} -s start_time -e end_time -t trend_extensions -c channel_name [ -p output_directory -r trend_type ]
 
 ARGUMENTS:
 
