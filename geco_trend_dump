@@ -20,8 +20,11 @@ SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
 CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
-FULL_SCRIPT_PATH="$(readlink -f "${0}")" # use to recursively call this script
-SCRIPT_NAME="$(basename "${FULL_SCRIPT_PATH}")"
+pushd `dirname ${0}` > /dev/null
+SCRIPT_DIR=`pwd -P`
+popd > /dev/null
+SCRIPT_NAME="$(basename "$0")"
+FULL_SCRIPT_PATH="${SCRIPT_DIR}/$(SCRIPT_NAME)"
 TIMEOUT=120
 LOGFILE=/dev/stderr           # by default, just log to STDERR. TODO move to
                               # getopts section below since it gets overridden
