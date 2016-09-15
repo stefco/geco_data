@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# reformat the output of an nds_query into a tabular format with time in the
+# first column and trend value in the second
+tabularize_nds_query_result () {
+    # local n_values
+    local gps_start_time
+    read -r l
+    gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
+    read -r
+    read -r
+    read -r l
+    # this next line is currently unused; might remove
+    # n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
+    sed 's/ *[0-9]* *//;s/  */'$'\\\n/g' \
+        | awk '{printf "%s\n", $0}'
+}
+
+tabularize_nds_query_result
