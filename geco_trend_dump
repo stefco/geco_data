@@ -229,7 +229,7 @@ tabularize_nds_query_result () {
     # local n_values
     local gps_start_time
     read -r l
-    gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
+    gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l" )
     read -r
     read -r
     read -r l
@@ -370,7 +370,7 @@ fork_process_for_each_trend_extension () {
     local outdir_pre="${3}"
     # check: are we using -f flag to force overwrites?
     local _f
-    _f="$(("${force}" && echo '-f') || true)"
+    _f="$( ("${force}" && echo '-f') || true)"
     # make a folder for the named PIPES
     tmp_dir="$(mktemp -d)"
     # add comma to the front of the list to make name substitutions easier
