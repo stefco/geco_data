@@ -20,8 +20,8 @@ SECONDS_PER_VAL=60            # Each value represents 60 seconds of data
 CHAN_TYPE='m-trend'           # Only use minute trends for now
 VALID_TREND_EXTENSIONS="mean min max n rms"
 NDS_SERVER='nds.ligo.caltech.edu'
-pushd "`dirname ${0}`" > /dev/null
-SCRIPT_DIR="`pwd -P`"
+pushd "$(dirname "${0}")" > /dev/null
+SCRIPT_DIR="$(pwd -P)"
 popd > /dev/null
 SCRIPT_NAME="$(basename "$0")"
 FULL_SCRIPT_PATH="${SCRIPT_DIR}/${SCRIPT_NAME}"
@@ -173,7 +173,7 @@ check_for_expired_kerberos_credentials () {
         )"
     )
     current_time=$(lalapps_tconvert -t)
-    if [ ${expiration_time} -le ${current_time} ]; then
+    if [ "${expiration_time}" -le "${current_time}" ]; then
         echo 'Error: Kerberos credentials expired. Refresh with kinit.' >&2
         exit 1
     fi
@@ -256,9 +256,11 @@ dump_trend () {
     # if the output file already exists, keep moving; otherwise, run query
     if ! [ -e "${outfile}" ]; then
         # next three lines add a descriptive header to the file
-        echo "${channel_name}" >> "${tmp}"
-        echo "${trend_extension}" >> "${tmp}"
-        printf 'GPS-TIME\tTREND-VALUE\n' >> "${tmp}"
+        {
+            echo "${channel_name}"
+            echo "${trend_extension}"
+            printf 'GPS-TIME\tTREND-VALUE\n'
+        } >> "${tmp}"
         # this dumps the tabularized data
         run_nds_query "${gps_start_time}" "${delta_t}" \
                 "${channel_name}" "${trend_extension}" \
@@ -289,9 +291,9 @@ concatenate_time_segments () {
     local gps_start_time="${1}"
     local gps_end_time="${2}"
     # check if start and end time are nonempty; if so, include them
-    if [ -z ${gps_start_time:+x} ] && [ -z ${gps_end_time:+x} ]; then
+    if [ -z "${gps_start_time:+x}" ] && [ -z "${gps_end_time:+x}" ]; then
         first_time_segment=""
-    elif [ -z ${gps_start_time:+x} ] || [ -z ${gps_end_time:+x} ]; then
+    elif [ -z "${gps_start_time:+x}" ] || [ -z "${gps_end_time:+x}" ]; then
         echo "Must provide both start and stop times, or neither" >&2
         usage
         exit 1
@@ -309,7 +311,7 @@ validate_time_segments () {
     while read -r gps_start_time gps_end_time rest_of_line; do
         lines=$((lines + 1))
         # start must be before end
-        if [ ${gps_end_time} -le ${gps_start_time} ]; then
+        if [ "${gps_end_time}" -le "${gps_start_time}" ]; then
             echo "Error: End time must be strictly greater than start." >&2
             echo "    line number: ${lines}" >&2
             echo "    line: ${gps_start_time} ${gps_end_time} ${rest_of_line}" >&2
@@ -350,12 +352,12 @@ round_time_segments () {
 # aren't too long for nds to handle
 split_time_segments () {
     while read -r gps_start_time gps_end_time rest_of_line; do
-        next_epoch=$((gps_start_time / ${MAX_TIME_INTERVAL}
-                      * ${MAX_TIME_INTERVAL} + ${MAX_TIME_INTERVAL}))
+        next_epoch=$((gps_start_time / MAX_TIME_INTERVAL
+                      * MAX_TIME_INTERVAL + MAX_TIME_INTERVAL))
         split_segment="${gps_start_time} "
-        while [ ${next_epoch} -lt ${gps_end_time} ]; do
+        while [ "${next_epoch}" -lt "${gps_end_time}" ]; do
             split_segment="${split_segment}${next_epoch}"$'\n'"${next_epoch} "
-            next_epoch=$((next_epoch + ${MAX_TIME_INTERVAL}))
+            next_epoch=$((next_epoch + MAX_TIME_INTERVAL))
         done
         split_segment="${split_segment}${gps_end_time}"
         echo "${split_segment}"
@@ -381,11 +383,11 @@ fork_process_for_each_trend_extension () {
                 -t "${te}" \
                 -c "${channel_name}" \
                 -p "${outdir_pre}" \
-                ${_f} <"${tmp_dir}/${te}" & p=$!
+                "${_f}" <"${tmp_dir}/${te}" & p=$!
         declare "pid_${te}=${p}"
     done
     # write STDIN to each named PIPE
-    tee ${comma_trend_extensions//,/ ${tmp_dir}/} >/dev/null
+    tee "${comma_trend_extensions//,/ ${tmp_dir}/}" >/dev/null
     # delete PIPES     
     rm -rf "${tmp_dir}"
     # wait for subprocesses to complete
@@ -395,7 +397,7 @@ fork_process_for_each_trend_extension () {
             printf "%s" "${!pid} "
         done
     )
-    wait ${pids}
+    wait "${pids}"
 }
 
 # read time segments from stdin and dump data for each
