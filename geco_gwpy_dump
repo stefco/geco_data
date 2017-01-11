@@ -68,8 +68,8 @@ def get_subspans(job):
     # do we start and end cleanly at the start of new days (in gps time)?
     first_gps_day = int(math.ceil(job["start"] / SEC_PER_DAY))
     last_gps_day = job["end"] // SEC_PER_DAY
-    spans = [ [i, i+1] for i in
-              range(first_gps_day, last_gps_day) ] * SEC_PER_DAY
+    spans = [ [i * SEC_PER_DAY, (i+1) * SEC_PER_DAY] for i in
+              range(first_gps_day, last_gps_day) ]
     # include the parts of the timespan outside of the full days
     if total_span[0] != first_gps_day * SEC_PER_DAY:
         spans.insert(0, [total_span[0], first_gps_day * SEC_PER_DAY])
@@ -77,12 +77,12 @@ def get_subspans(job):
         spans.append([last_gps_day *SEC_PER_DAY, total_span[1]])
     return spans
 
-def fname(span, channel, ext=txt):
+def fname(span, channel, ext="txt"):
     """get a filename for this particular timespan and channel"""
-    return "{}__{}__{}.{}".format(span[0], span[1],
-                                  channel.replace(':', '..'), ext)
+    sanitized_channel = channel.replace(':', '..').replace(',', '--')
+    return "{}__{}__{}.{}".format(span[0], span[1], sanitized_channel, ext)
 
-def file_exists(span, channel, ext=txt):
+def file_exists(span, channel, ext="txt"):
     """see if this file exists."""
     return os.path.isfile(fname(span, channel, ext))
 
@@ -94,6 +94,8 @@ def download_data_if_missing(query):
     channel = query[1]
     ext     = query[2]
     # only download the data if the file doesn't already exist
+    logging.debug("running query {}, checking if file exists: {}".format(
+        query, fname(span, channel, ext)))
     if not file_exists(span, channel, ext):
         data = gwpy.timeseries.TimeSeries.get(channel, span[0], span[1])
         data.write(fname(span, channel, ext))
@@ -107,7 +109,7 @@ def main():
         exit()
     else:
         jobspecfile = sys.argv[1]
-    # create logger for debugging; in future, make it possible to specify
+    # create logging for debugging; in future, make it possible to specify
     # logging level. logfile name based on jobspec filename.
     logging.basicConfig(filename='{}.log'.format(jobspecfile),
                         level=logging.DEBUG,
@@ -146,3 +148,5 @@ def main():
     # start a multiprocessing pool so that we can download in parallel
     pool = multiprocessing.Pool(processes=num_threads)
     pool.map(download_data_if_missing, queries)
+
+main()
