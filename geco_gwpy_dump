@@ -1,0 +1,148 @@
+#! /usr/bin/env python
+# (c) Stefan Countryman, Jan 2017
+
+import gwpy.timeseries
+import gwpy.time
+import json
+import multiprocessing
+import math
+import sys
+import os
+import logging
+
+# allowed file extensions for GWPy writing to file, documented at:
+# https://gwpy.github.io/docs/v0.1/timeseries/index.html#gwpy.timeseries.TimeSeries.write
+ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
+SEC_PER_DAY = 86400
+USAGE="""
+Save channel data in a sane, interruptible, parallelizable way.
+
+Usage:
+Look for a file in the current directory called "jobspec.json", which is
+a dictionary containing "start", "end", "channels", and "trends" key-value
+pairs. The "start" and "end" values must merely be readable by
+gwpy.timeseries.TimeSeries.get. The "channels" value is an array containing
+strings of valid ligo epics channels. The "trends" value is an array
+containing trend suffixes to use. For full data, use [""]. For all
+available minute trends, use
+
+    [
+        ".mean,m-trend",
+        ".max,m-trend",
+        ".min,m-trend",
+        ".n,m-trend",
+        ".rms,m-trend"
+    ]
+
+etc.
+
+If an argument is given, that argument will be interpreted as the jobspec
+filepath.
+
+By default, data is downloaded in day-long chunks (except for the starting and
+trailing timespans, which might be shorter). Full day timespans start and end
+on gps days, so their gps times are divisible by 86400. The data spans are
+contiguous with no overlap.
+
+Default file output is in "txt" format. In the future, I might add the ability
+to specify an alternative file extension from one of those provided for
+saving and loading gwpy timeseries:
+
+{}
+""".format(ALLOWED_EXTENSIONS)
+
+def convert_job_span_to_gps_seconds(job):
+    """identify gps start and stop times, convert them to ints. mutates
+    original job."""
+    for key in ["start", "end"]:
+        if isinstance(job[key], float):
+            job[key] = int(job[key])
+        elif not isinstance(job[key], int):
+            job[key] = gwpy.time.to_gps(str(job[key])).gpsSeconds
+
+def get_subspans(job):
+    """split the time interval into subintervals that are each a day long,
+    return that list of subintervals."""
+    total_span = [(job["start"] // 60) * 60,
+                  int(math.ceil(job["end"] / 60.)) * 60]
+    # do we start and end cleanly at the start of new days (in gps time)?
+    first_gps_day = int(math.ceil(job["start"] / SEC_PER_DAY))
+    last_gps_day = job["end"] // SEC_PER_DAY
+    spans = [ [i, i+1] for i in
+              range(first_gps_day, last_gps_day) ] * SEC_PER_DAY
+    # include the parts of the timespan outside of the full days
+    if total_span[0] != first_gps_day * SEC_PER_DAY:
+        spans.insert(0, [total_span[0], first_gps_day * SEC_PER_DAY])
+    if total_span[1] != last_gps_day * SEC_PER_DAY:
+        spans.append([last_gps_day *SEC_PER_DAY, total_span[1]])
+    return spans
+
+def fname(span, channel, ext=txt):
+    """get a filename for this particular timespan and channel"""
+    return "{}__{}__{}.{}".format(span[0], span[1],
+                                  channel.replace(':', '..'), ext)
+
+def file_exists(span, channel, ext=txt):
+    """see if this file exists."""
+    return os.path.isfile(fname(span, channel, ext))
+
+def download_data_if_missing(query):
+    """download missing data if necessary. the query contains start, end,
+    channel name, and file extension information in the following format:
+        [ [start, end], channel, ext ]"""
+    span    = query[0]
+    channel = query[1]
+    ext     = query[2]
+    # only download the data if the file doesn't already exist
+    if not file_exists(span, channel, ext):
+        data = gwpy.timeseries.TimeSeries.get(channel, span[0], span[1])
+        data.write(fname(span, channel, ext))
+
+def main():
+    # print the help message if necessary, or specify an alternative jobspec file
+    if len(sys.argv) == 1:
+        jobspecfile = 'jobspec.json'
+    elif sys.argv[1] == '-h':
+        print(USAGE)
+        exit()
+    else:
+        jobspecfile = sys.argv[1]
+    # create logger for debugging; in future, make it possible to specify
+    # logging level. logfile name based on jobspec filename.
+    logging.basicConfig(filename='{}.log'.format(jobspecfile),
+                        level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+
+    # file extension for output files (might make user-editable in future)
+    exts = ['txt']
+    # number of parallel download threads
+    num_threads = 6
+
+    # load our job specification
+    with open(jobspecfile, "r") as f:
+        job = json.load(f)
+
+    # make sure start and end times are in gps seconds
+    convert_job_span_to_gps_seconds(job)
+    logging.debug('job after gps conversion: {}'.format(job))
+
+    # all possible combinations of channels and trends
+    chans = [ c + t
+                  for c in job['channels']
+                  for t in job['trends']   ]
+    logging.debug('all channels: {}'.format(chans))
+
+    # split our overall timespan into a more manageable list of subspans
+    spans = get_subspans(job)
+    logging.debug('all spans: {}'.format(spans))
+
+    # all queries (combinations of start/end and channel names)
+    queries = [ [span, chan, ext]
+                    for chan in chans
+                    for span in spans
+                    for ext  in exts ]
+    logging.debug('all queries: {}'.format(queries))
+
+    # start a multiprocessing pool so that we can download in parallel
+    pool = multiprocessing.Pool(processes=num_threads)
+    pool.map(download_data_if_missing, queries)
