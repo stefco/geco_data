@@ -9,9 +9,11 @@ import math
 import sys
 import os
 import logging
+import shutil
 
 # allowed file extensions for GWPy writing to file, documented at:
 # https://gwpy.github.io/docs/v0.1/timeseries/index.html#gwpy.timeseries.TimeSeries.write
+VERBOSE_GWPY = True
 ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
 SEC_PER_DAY = 86400
 USAGE="""
@@ -94,10 +96,13 @@ def download_data_if_missing(query):
     channel = query[1]
     ext     = query[2]
     # only download the data if the file doesn't already exist
-    logging.debug("running query {}, checking if file exists: {}".format(
+    logging.debug("running query: {}, \nchecking if file exists: {}".format(
         query, fname(span, channel, ext)))
     if not file_exists(span, channel, ext):
-        data = gwpy.timeseries.TimeSeries.get(channel, span[0], span[1])
+        logging.debug("{} not found, running query.".format(query))
+        data = gwpy.timeseries.TimeSeries.get(channel, span[0], span[1],
+                                              verbose=VERBOSE_GWPY)
+        logging.info("query succeeded, saving to file: {}".format(query))
         data.write(fname(span, channel, ext))
 
 def main():
@@ -112,7 +117,8 @@ def main():
     # create logging for debugging; in future, make it possible to specify
     # logging level. logfile name based on jobspec filename.
     logging.basicConfig(filename='{}.log'.format(jobspecfile),
-                        level=logging.DEBUG,
+                        level=logging.INFO,
+                        # level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(message)s')
 
     # file extension for output files (might make user-editable in future)
@@ -148,5 +154,19 @@ def main():
     # start a multiprocessing pool so that we can download in parallel
     pool = multiprocessing.Pool(processes=num_threads)
     pool.map(download_data_if_missing, queries)
+    logging.info('done downloading data.')
+
+    # now that the data has been downloaded, concatenate the file segments
+    # only actually concatenate the files if using "txt" file format
+    if "txt" in exts:
+        total_span = [spans[0][0], spans[-1][1]]
+        for chan in chans:
+            if not file_exists(total_span, chan, "txt"):
+                logging.debug('combining timeseries for {}'.format(chan))
+                with open(fname(total_span, chan, "txt"), "wb") as of:
+                    for span in spans:
+                        with open(fname(span, chan, "txt"), "rb") as f:
+                            shutil.copyfileobj(f, of)
+                logging.debug('done.')
 
 main()
