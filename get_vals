@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# reformat the output of an nds_query into a tabular format with time in the
+# first column and trend value in the second
+tabularize_nds_query_result () {
+    # local n_values
+    local gps_start_time
+    read -r l
+    gps_start_time=$(sed 's/.*GPS: \([0-9]*\).*$/\1/' <<<"$l")
+    read -r
+    read -r
+    read -r l
+    # this next line is currently unused; might remove
+    # n_values=$(sed 's/.*nWords: \([0-9]*\).*$/\1/' <<<"$l")
+    sed 's/ *[0-9]* *//;s/  */'$'\\\n/g' \
+        | awk '{printf "%s\n", $0}'
+}
+
+USAGE () {
+    cat <<"EOF"
+Format the results of an NDS query so that it is just a newline delimited
+timeseries (with no t-axis, just a single column). This is the format read
+in by geco_irig_decode.
+
+example: 
+
+nds_query \
+    -n nds.ligo.caltech.edu \
+    -s $(lalapps_tconvert "$start_time") \
+    -d 30 \
+    -v $chan \
+        | get_vals \
+        | ~/geco/geco_data/geco_irig_decode.py
+EOF
+
+if [ "$1"q = '-hq' ]; then
+    USAGE
+    exit
+fi
+
+tabularize_nds_query_result
