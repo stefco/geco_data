@@ -2,6 +2,7 @@
 
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second
+
 tabularize_nds_query_result () {
     # local n_values
     local gps_start_time
@@ -32,6 +33,7 @@ nds_query \
         | get_vals \
         | ~/geco/geco_data/geco_irig_decode.py
 EOF
+}
 
 if [ "$1"q = '-hq' ]; then
     USAGE
