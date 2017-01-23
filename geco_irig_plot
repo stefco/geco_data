@@ -22,22 +22,29 @@ parser.add_argument("--detector", help="the detector; used in the title of the o
 parser.add_argument("-O", "--outfile", help="the filename of the generated plot")
 parser.add_argument("-T", "--timeseries", help="copy from stdin to stdout while reading",
                     action="store_true")
+parser.add_argument("-A", "--actualtime", help="actual time signal was recorded (appears in title)")
 args = parser.parse_args()
 
 # get the detector name
-if not (args.detector) or args.detector == None:
+if not (args.detector) or args.detector is None:
     detector_name = ""
 else:
     detector_name = " at " + args.detector
 
 # get the output filename
-if not (args.outfile) or args.outfile == None:
+if not (args.outfile) or args.outfile is None:
     output_filename = "irigb-plot-made-at-" + str(time.time()) + ".png"
 else:
     output_filename = args.outfile
     # append .png if not already there
     if output_filename.split(".")[-1] != "png":
         output_filename += ".png"
+
+# get the actual time of recording, if provided
+if not (args.actualtime) or args.outfile is None:
+    actual_time_str = ""
+else:
+    actual_time_str = "\nActual Time: " + args.actualtime
 
 # bitrate of signal (only decode one second)
 bitrate = 16384
@@ -81,10 +88,13 @@ for plot_num in range(0, num_subdivs):
              timeseries[ bitrate * plot_num // num_subdivs : bitrate * (plot_num+1) // num_subdivs ],
              'k')
 # add title and so on
-decoded_time = geco_irig_decode.get_date_from_timeseries(timeseries)
-decoded_time_str = decoded_time.strftime('%a %b %d %X %Y')
+try:
+    decoded_time = geco_irig_decode.get_date_from_timeseries(timeseries)
+    decoded_time_str = decoded_time.strftime('%a %b %d %X %Y')
+except ValueError as e:
+    decoded_time_str = "COULD NOT DECODE TIME"
 plt.suptitle("One Second of IRIG-B Signal" + detector_name + '\n'
-             + "at decoded GPS time: " + decoded_time_str)
+             + "Decoded Time: " + decoded_time_str + actual_time_str)
 plt.xlabel("Time since start of second [$s$]")
 # plt.ylabel("IRIG-B Signal")
 # print("saving plot")
