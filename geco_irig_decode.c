@@ -1,3 +1,4 @@
+/* (c) Stefan Countryman, 2016 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>

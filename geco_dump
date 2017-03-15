@@ -1,8 +1,8 @@
 #!/bin/bash
+# (c) Stefan Countryman 4/2/2016
 
 # a script for dumping to text a timeseries for a given channel
 # over a given time range from the highest speed storage medium
-# Stefan Countryman 4/2/2016
 
 set -o errexit
 set -o nounset

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# (c) Stefan Countryman, 2016-2017
 
 # plot an IRIG-B signal read from stdin or from a textfile
 # assumes that the input values each appear on a new line

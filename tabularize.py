@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# (c) Stefan Countryman, 2016
 
 import sqlite3
 import re

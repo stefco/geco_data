@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# (c) Stefan Countryman, 2016-2017
 
 import sys
 import numpy as np

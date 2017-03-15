@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stefan Countryman 4/15/2016
+# (c) Stefan Countryman 4/15/2016
 
 # take the first second worth of an IRIG-B timeseries from stdin and reads what
 # time it represents.

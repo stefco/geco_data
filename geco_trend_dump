@@ -1,6 +1,6 @@
 #!/bin/bash
+# (c) Stefan Countryman, 5/24/16
 
-# Stefan Countryman, 5/24/16
 # Download minute trends for a given channel
 
 set -o errexit

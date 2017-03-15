@@ -1,4 +1,5 @@
 #!/bin/bash
+# (c) Stefan Countryman, 2016
 
 # just zip up all directories with the word TIMING in them in them.
 # forks multiple processes, so this is a quick way to do it.

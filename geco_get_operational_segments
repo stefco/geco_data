@@ -1,7 +1,7 @@
 #!/bin/bash
+# (c) Stefan Countryman, 6/30/16
 
 #------------------------------------------------------------------------------
-# Stefan Countryman, 6/30/16
 # returns a two-column list of start/stop times for segments when a detector
 # was operational. useful for avoiding false alarm anomalies arising from e.g.
 # maintenance.

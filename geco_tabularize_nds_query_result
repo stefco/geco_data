@@ -1,4 +1,5 @@
 #!/bin/bash
+# (c) Stefan Countryman, 2016
 
 # reformat the output of an nds_query into a tabular format with time in the
 # first column and trend value in the second

@@ -1,4 +1,5 @@
 #!/bin/bash
+# (c) Stefan Countryman 2016
 
 # check that the decoded IRIG-B time (which will give GPS time, not UTC)
 # is correct for a given time.
