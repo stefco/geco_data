@@ -96,14 +96,12 @@ control_bits[0] = True
 #-------------------------------------------------------------------------------
 
 def get_date_from_timeseries(timeseries):
-    #---------------------------------------------------------------------------
-    # MAIN
-    #---------------------------------------------------------------------------
+    """Decode the input waveform, which is assumed to be a 16384hz digitized
+    IRIG-B signal using DCLS (DC Level Shift)."""
     # filter the timeseries to remove ringing at corners
     # filt = scf.gaussian_filter1d(timeseries, CONVOLUTION_SIGMA * SAMPLE_RATE)
 
     # check all test points
-    # bits_high = (filt[ALL_TEST_POINT_INDICES] >= HIGH_SIGNAL_THRESHOLD).astype(int)
     bits_high = (timeseries[ALL_TEST_POINT_INDICES] >= HIGH_SIGNAL_THRESHOLD).astype(int)
 
     # represent control bits with the number 2
