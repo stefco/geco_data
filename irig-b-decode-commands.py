@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 # (c) Stefan Countryman 2017
 
-import geco_irig_plot
-import geco_irig_decode
-import gwpy.timeseries
-import astropy.time
-import argparse
-
 DESC = """Perform some IRIG-B checks for an event:
   1. Decode IRIG-B signals for the times surrounding the event
   2. Check that the times are correct.
@@ -25,15 +19,23 @@ CHANS = ['{}:CAL-PCAL{}_IRIGB_OUT_DQ'.format(ifo, arm)
          for ifo in IFOS for arm in ARMS]
 TFORMAT = '%a %b %d %X %Y'
 
-def get_parser():
-    """Get an argument parser for this program's CLI."""
+# THE REST OF THE IMPORTS ARE AFTER THIS IF STATEMENT.
+# Quits immediately on --help or -h flags to skip slow imports when you just
+# want to read the help documentation.
+if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser(description=DESC,
                                      epilog=EPILOG)
     parser.add_argument("-t", "--gpstime", type=float,
                         help="The gps time of the event.")
     parser.add_argument("-g", "--graceid",
                         help="The GraceDB ID of the event.")
-    return parser
+    args = parser.parse_args()
+
+import geco_irig_plot
+import geco_irig_decode
+import gwpy.timeseries
+import astropy.time
 
 def get_leap_seconds(gps):
     """Find the number of leap seconds at a given gps time using astropy's
@@ -97,9 +99,7 @@ def check_decoded_times(start_time, graceid, DT=DT):
                     f.write('{} IS WRONG! '.format(t.strftime(TFORMAT)))
                     f.write('SHOULD BE {}\n'.format(t_actual_str))
 
-def main():
-    args = get_parser().parse_args()
-
+if __name__ == "__main__":
     if args.graceid is None:
         with open('graceid.txt', 'r') as f:
             graceid = f.read().strip()
@@ -122,6 +122,3 @@ def main():
 
     make_plots(start_time)
     check_decoded_times(start_time, graceid)
-
-if __name__ == "__main__":
-    main()

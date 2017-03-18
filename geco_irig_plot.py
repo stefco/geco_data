@@ -1,34 +1,16 @@
 #!/usr/bin/env python
 # (c) Stefan Countryman, 2016-2017
 
-# plot an IRIG-B signal read from stdin or from a textfile
-# assumes that the input values each appear on a new line
-
-# Force matplotlib to not use any Xwindows backend. NECESSARY ON CLUSTER.
-import matplotlib
-matplotlib.use('Agg')
-import sys
-import time
-import argparse
-import numpy as np
-import matplotlib.pyplot as plt
-import geco_irig_decode
-
+DESC="""Plot an IRIG-B signal read from stdin. Assumes that the timeseries
+is a sequence of newline-delimited float literals."""
 FAST_CHANNEL_BITRATE = 16384  # for IRIG-B, DuoTone, etc.
 
-def main():
-    """Get arguments from command line and figure out which plot to make."""
-    args = get_parser().parse_args()
-    timeseries = read_timeseries_stdin(FAST_CHANNEL_BITRATE,
-                                       cat_to_stdout=args.timeseries)
-    title = irigb_decoded_title(timeseries, args.detector, args.actualtime)
-    output_filename = irigb_output_filename(args.outfile)
-    plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
-                           output_filename=output_filename)
-
-def get_parser():
-    """Define an argument parser for this script."""
-    parser = argparse.ArgumentParser()
+# THE REST OF THE IMPORTS ARE AFTER THIS IF STATEMENT.
+# Quits immediately on --help or -h flags to skip slow imports when you just
+# want to read the help documentation.
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description=DESC)
     # TODO: make this -i and --ifo instead of detector.
     parser.add_argument("--detector",
                         help=("the detector; used in the title of the output "
@@ -41,7 +23,16 @@ def get_parser():
     parser.add_argument("-A", "--actualtime",
                         help=("actual time signal was recorded "
                               "(appears in title)"))
-    return parser
+    args = parser.parse_args()
+
+# Force matplotlib to not use any Xwindows backend. NECESSARY ON CLUSTER.
+import matplotlib
+matplotlib.use('Agg')
+import sys
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+import geco_irig_decode
 
 def read_timeseries_stdin(num_lines, cat_to_stdout=False):
     """Read in newline-delimited numerical data from stdin; don't read more
@@ -94,10 +85,11 @@ def irigb_output_filename(outfile=None):
     return output_filename
 
 def plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
-                           output_filename=None):
+                           output_filename=None, overlay=False, linewidth=1):
     """Plot a timeseries and produce num_subdivs subplots that show equal-sized
     subdivisions of the full timeseries data to show details (good for
-    high-bitrate timeseries)."""
+    high-bitrate timeseries). If you want to keep plotting data to the same
+    figure, set 'overlay=True', and the current figure will be plotted to."""
     bitrate = int(len(timeseries) / float(dt))
     times = np.linspace(0, 1, num=bitrate, endpoint=False)
     
@@ -106,13 +98,15 @@ def plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
     ymax = timeseries.max() + 0.1*yrange
     ymin = timeseries.min() - 0.1*yrange
     
+    if not overlay:
+        plt.figure()
     # print("making plot")
-    plt.close('all')
-    plt.figure(1, figsize=(2+num_subdivs,10)) # approx. 1 inch per zoomed plot
+    plt.gcf().set_figwidth(7)
+    plt.gcf().set_figheight(4+1.2*num_subdivs) # ~1.2in height per zoomed plot
     # plot the full second on the first row; lines should be black ('k' option).
     plt.subplot(num_subdivs + 1, 1, 1)
     plt.ylim(ymin, ymax)
-    plt.plot(times, timeseries, 'k')
+    plt.plot(times, timeseries, 'k', linewidth=linewidth)
     plt.tick_params(axis='y', labelsize='small')
     # make num_subdivs subplots to better show the full second
     for i in range(num_subdivs):
@@ -122,7 +116,8 @@ def plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
         plt.xlim(float(i)/num_subdivs, (float(i)+1)/num_subdivs)
         start = bitrate*i     // num_subdivs
         end   = bitrate*(i+1) // num_subdivs
-        plt.plot(times[start:end], timeseries[start:end], 'k')
+        plt.plot(times[start:end], timeseries[start:end], 'k',
+		 linewidth=linewidth)
         plt.tick_params(axis='y', labelsize='small')
     plt.suptitle(title)
     plt.xlabel("Time since start of second [$s$]")
@@ -135,4 +130,9 @@ def plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
     return plt
 
 if __name__ == '__main__':
-    main()
+    timeseries = read_timeseries_stdin(FAST_CHANNEL_BITRATE,
+                                       cat_to_stdout=args.timeseries)
+    title = irigb_decoded_title(timeseries, args.detector, args.actualtime)
+    output_filename = irigb_output_filename(args.outfile)
+    plot_with_zoomed_views(timeseries, title, num_subdivs=5, dt=1.,
+                           output_filename=output_filename)
