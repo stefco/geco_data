@@ -12,6 +12,32 @@ To see detailed usage instructions, run the command followed by an `-h` flag.
 
 ## Examples
 
+### Checks and Plots for EVNT Log and Timing Witness Paper
+
+After an event, you will need to generate a bunch of timing plots. Generate the
+IRIG-B decoded times and plots with:
+
+```bash
+irig-b-decode-commands.py -t GPSTIME -g GRACEID
+```
+
+Make DuoTone statistics plots showing the zero-crossing at the time of the
+event as well as in the surrounding 10 minutes for each site:
+
+```bash
+duotone_delay.py --stat --ifo H1 -t GPSTIME
+duotone_delay.py --stat --ifo L1 -t GPSTIME
+```
+
+Make overlay plots for IRIG-B and DuoTone as well as zero-crossing plots
+for the DuoTone in the +/-15 minutes surrounding the event:
+
+```bash
+geco_overlay_plots.py -t GPSTIME
+```
+
+### Dumping data
+
 Here is how I have been using these scripts to e.g. dump all files
 for October 2015.
 
