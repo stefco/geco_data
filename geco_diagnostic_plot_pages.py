@@ -143,7 +143,9 @@ def make_channel_plots(outdir, chans, gps, dt=DT, verbose=False,
         for chan in bufs:
             buf = bufs[chan]
             filepath = os.path.join(outdir, channel_fname(gps, chan))
-            buf.plot().savefig(filepath)
+            plot = buf.plot()
+            plot.set_title(buf.channel.name.replace('_', '\_'))
+            plot.savefig(filepath)
 
 if __name__ == '__main__':
     chans = get_channel_list()
