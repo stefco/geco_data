@@ -6,17 +6,6 @@
 # svn.ligo.caltech.edu/svn/aligocalibration/trunk/Common/MatlabTools/timing
 # Functions to measure DuoTone timing delay and make DuoTone related plots.
 
-# need print function for newline-free printing
-import matplotlib
-# Force matplotlib to not use any Xwindows backend. NECESSARY FOR HEADLESS.
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-# Use gwpy to fetch data
-import gwpy.timeseries
-import argparse
-import numpy as np
-import scipy.signal
-
 DESC="""A module (that can also be used as a script) for plotting delay
 histograms in DuoTone signals as well as DuoTone overlay plots. Code is written
 in python. Several functions are translated from Keita Kawabe's MATLAB code
@@ -35,6 +24,37 @@ EPILOG="""EXAMPLES:
 MINUTES = 5
 SECONDS_PER_MINUTE = 60
 IFOs = ['H1', 'L1']
+
+# THE REST OF THE IMPORTS ARE AFTER THIS IF STATEMENT.
+# Quits immediately on --help or -h flags to skip slow imports when you just
+# want to read the help documentation.
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=DESC, epilog=EPILOG)
+    parser.add_argument('-s','--stat', action='store_true', default=False,
+                        help=("Make commissioningFrameDuotoneStat plots, i.e. "
+                              "histograms of the deviation of the DuoTone "
+                              "zero-crossing delay from the expected deviation "
+                              "for each second in a {} minute time interval "
+                              "surrounding the specified GPS time, as well as "
+                              "a vertical line indicating the DuoTone delay "
+                              "deviation at the specified GPS time. "
+                              "Based on Keita's MATLAB code.").format(MINUTES))
+    parser.add_argument('-i','--ifo', choices=IFOs,
+                        help=('Which IFO to include in the plot.'))
+    parser.add_argument('-t','--gpstime', type=float,
+                        help=('GPS time of the event.'))
+    args = parser.parse_args()
+
+# need print function for newline-free printing
+import matplotlib
+# Force matplotlib to not use any Xwindows backend. NECESSARY FOR HEADLESS.
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+# Use gwpy to fetch data
+import gwpy.timeseries
+import numpy as np
+import scipy.signal
 
 # get a list of channels to plot and analyze
 def chans(IFO):
@@ -395,26 +415,7 @@ def iopDecimDelay(IFO, f, gpstime):
     
     return delay
 
-def get_parser():
-    parser = argparse.ArgumentParser(description=DESC, epilog=EPILOG)
-    parser.add_argument('-s','--stat', action='store_true', default=False,
-                        help=("Make commissioningFrameDuotoneStat plots, i.e. "
-                              "histograms of the deviation of the DuoTone "
-                              "zero-crossing delay from the expected deviation "
-                              "for each second in a {} minute time interval "
-                              "surrounding the specified GPS time, as well as "
-                              "a vertical line indicating the DuoTone delay "
-                              "deviation at the specified GPS time. "
-                              "Based on Keita's MATLAB code.").format(MINUTES))
-    parser.add_argument('-i','--ifo', choices=IFOs,
-                        help=('Which IFO to include in the plot.'))
-    parser.add_argument('-t','--gpstime', type=float,
-                        help=('GPS time of the event.'))
-    return parser
-
 if __name__ == "__main__":
-    args = get_parser().parse_args()
-
     # should we plot commissioningFrameDuotoneStat?
     if args.stat:
         # make sure IFO and gpstime are included
