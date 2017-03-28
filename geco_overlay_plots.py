@@ -20,6 +20,8 @@ OVERLAY_DPI = 400         # overlay plots need higher resolution to show detail
 # OVERLAY_PLOT_TITLE_HEIGHT = 2.4
 DEFAULT_OFFSET = DEFAULT_DELTA_T // 2
 DEFAULT_MAX_FETCH_SIZE = 60 # max number of seconds to fetch from NDS2 at once
+DEFAULT_IFOS = ['H1', 'L1'] # which IFOs to plot for by default
+DEFAULT_PLOTS = ['irigb', 'duotone']    # which plots to make by default?
 DUOTONE_START = -2        # data points before start of second to include?
 DUOTONE_END   = 6         # data points after end of second to include?
 ZOOMS = {
@@ -48,11 +50,13 @@ if __name__ == "__main__":
                               "the --gpstime. Defaults to "
                               "{}").format(DEFAULT_OFFSET))
     parser.add_argument("-p", "--plots", choices=('irigb', 'duotone'),
-                        nargs='*', default=['irigb', 'duotone'],
-                        help="Which plots to make?")
+                        nargs='*', default=DEFAULT_PLOTS,
+                        help=("Which plots to make? Defaults to: "
+                              "{}").format(DEFAULT_PLOTS))
     parser.add_argument("-i", "--ifos", choices=('H1', 'L1'),
-                        nargs='*', default=['H1', 'L1'],
-                        help="Which detectors to make plots for?")
+                        nargs='*', default=DEFAULT_IFOS,
+                        help=("Which detectors to make plots for? Defaults to: "
+                              "{}").format(DEFAULT_IFOS))
     parser.add_argument("-v", "--verbose", action='store_true',
                         help="If provided, print verbose progress information.")
     args = parser.parse_args()
