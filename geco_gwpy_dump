@@ -100,8 +100,8 @@ def download_data_if_missing(query):
         query, fname(span, channel, ext)))
     if not file_exists(span, channel, ext):
         logging.debug("{} not found, running query.".format(query))
-        data = gwpy.timeseries.TimeSeries.get(channel, span[0], span[1],
-                                              verbose=VERBOSE_GWPY)
+        data = gwpy.timeseries.TimeSeries.fetch(channel, span[0], span[1],
+                                                verbose=VERBOSE_GWPY)
         logging.info("query succeeded, saving to file: {}".format(query))
         data.write(fname(span, channel, ext))
 
