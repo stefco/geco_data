@@ -16,7 +16,13 @@ Save channel data in a sane, interruptible, parallelizable way.
 
 Usage:
 
+Start downloading:
+
     geco_gwpy_dump
+
+Check progress:
+
+    geco_gwpy_dump -p
 
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
@@ -43,6 +49,9 @@ By default, data is downloaded in day-long chunks (except for the starting and
 trailing timespans, which might be shorter). Full day timespans start and end
 on gps days, so their gps times are divisible by 86400. The data spans are
 contiguous with no overlap.
+
+If some data cannot be fetched from the server, values of -1 will be used to
+pad the final concatenated output files.
 
 Default file output is in {} format. For now, only one file extension can be
 specified. All possible file formats:
@@ -96,6 +105,10 @@ import os
 import logging
 import shutil
 
+class NDS2Exception(IOError):
+    """An error thrown in association with some sort of failure to download
+    data."""
+
 class Query(object):
     """A channel and timespan for a single NDS query and save operation."""
     def __init__(self, start, end, channel, ext):
@@ -131,13 +144,31 @@ class Query(object):
                                                 self.end, verbose=VERBOSE_GWPY,
                                                 **kwargs)
     def read(self, **kwargs):
-        """Read this timeseries from file using GWpy."""
-        return gwpy.timeseries.TimeSeries.read(self.fname, **kwargs)
+        """Read this timeseries from file using GWpy. If the file is not
+        present, an IOError is raised, UNLESS an unsuccessful attempt has been
+        made to download the file, in which case it raises an
+        NDS2Exception (a custom error type)."""
+        try:
+            return gwpy.timeseries.TimeSeries.read(self.fname, **kwargs)
+        except IOError as e:
+            if not self.query_failed():
+                msg = ('tried concatenating data, but a download attempt seems '
+                       'not to have been made for this query: {} See IOError '
+                       'message: {}').format(self, e)
+                logging.error(msg)
+                raise IOError(('Aborting concatenation. Neither an error log '
+                               'file nor a saved timeseries file were found '
+                               'for this query: {}').format(self))
+            else:
+                logging.warn(('While reading, encountered failed query: '
+                              '{}. Padding...').format(self))
+                raise NDS2Exception(('This query seems to have failed '
+                                     'downloading: {}').format(self))
     def __str__(self):
         fmt = "start: {}, end: {}, channel: {}, ext: {}"
         return fmt.format(self.start, self.end, self.channel, self.ext)
     def __repr__(self):
-        fmt = str(type(self)) + '(start={}, end={}, channel={}, ext={})'
+        fmt = type(self).__name__ + '(start={}, end={}, channel={}, ext={})'
         return fmt.format(repr(self.start), repr(self.end),
                           repr(self.channel), repr(self.ext))
     # must be a staticmethod so that we can use multiprocessing on it
@@ -292,21 +323,51 @@ class Job(object):
         processes to try to improve I/O performance, though by default, only
         runs in a single process."""
         _run_queries(self, multiproc=False)
+    def __repr__(self):
+        fmt = (type(self).__name__
+               + '(start={}, end={}, channels={}, exts={}, trends={}, '
+               +  'max_chunk_length={})')
+        return fmt.format(repr(self.start), repr(self.end), repr(self.channels),
+                          repr(self.exts), repr(self.trends),
+                          repr(self.max_chunk_length))
     def concatenate_files(self):
         """Once all data has been downloaded for a job, concatenate that data
         based on the extension specified for the job."""
         for joblet in self.joblets:
             full_query = Query(joblet.start, joblet.end,
                                joblet.channels_with_trends[0], joblet.exts[0])
-            if not full_query.file_exists():
-                logging.debug(('combining timeseries for '
+            if full_query.file_exists():
+                logging.info(('This joblet has already been concatenated, '
+                              'skipping: {}').format(joblet))
+            else:
+                logging.debug(('concatenating timeseries for '
                                '{}').format(full_query.channel))
                 # load everything into memory... will fail for large jobs.
-                data = joblet.queries[0].read().copy()
-                for query in joblet.queries[1:]:
-                    data.append(query.read().copy())
-                data.write(full_query.fname)
-                logging.debug('done concatenating {}.'.format(full_query))
+                starting_index = 0
+                queries = joblet.queries
+                data_initialized = False
+                # if the first timespan was not available, simply try the next.
+                while not data_initialized:
+                    try:
+                        query = queries[starting_index]
+                        data = query.read().copy()
+                        start = query.start
+                        end = query.end
+                    except NDS2Exception as e:
+                        starting_index += 1
+                for query in queries[starting_index + 1:]:
+                    try:
+                        data.append(query.read().copy(), gap='pad', pad=-1.)
+                        end = query.end
+                    except NDS2Exception:
+                        pass
+                actual_query = Query(start, end, full_query.channel,
+                                     full_query.ext)
+                if not actual_query.file_exists():
+                    data.write(actual_query.fname)
+                logging.debug(('done concatenating full query: {}, resulting '
+                               'timeseries equivalent to query: '
+                               '{}').format(full_query, actual_query))
 
 def _run_queries(job, multiproc=False):
     """Try to download all data, i.e. run all queries. Can use multiple
@@ -321,6 +382,10 @@ def _run_queries(job, multiproc=False):
     logging.info('done downloading data.')
 
 if __name__ == '__main__':
+    check_progress = False
+    if '-p' in sys.argv:
+        sys.argv.remove('-p')
+        check_progress = True
     if len(sys.argv) == 1:
         jobspecfile = 'jobspec.json'
     else:
@@ -329,6 +394,29 @@ if __name__ == '__main__':
                         level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(message)s')
     job = Job.load(jobspecfile)
+    if check_progress:
+        print('Checking progress on job: {}'.format(job.to_dict()))
+        queries = job.queries
+        n_tot = len(queries)
+        print('Total downloads needed: {}'.format(n_tot))
+        successful = filter(lambda q: q.file_exists(), queries)
+        successful_percentage = len(successful) * 100. / n_tot
+        print('Successful downloads: {}'.format(len(successful)))
+        not_done = filter(lambda q: not q.file_exists(), queries)
+        failed = filter(lambda q: q.query_failed(), not_done)
+        failed_percentage = len(failed) * 100. / n_tot
+        print('Failed downloads: {}'.format(len(failed)))
+        failed_times = set([(q.start, q.end) for q in failed])
+        print('Failed timespans:')
+        for f in failed_times:
+            print('    {}'.format(f))
+        in_progress = filter(lambda q: not q.query_failed(), not_done)
+        in_progress_percentage = len(in_progress) * 100. / n_tot
+        print('In progress downloads: {}'.format(len(in_progress)))
+        summary_fmt = 'SUMMARY:\n{}% done\n{}% failed\n{}% remains'
+        print(summary_fmt.format(successful_percentage, failed_percentage,
+                                 in_progress_percentage))
+        exit(0)
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))
     logging.debug('all queries: {}'.format(job.queries))
