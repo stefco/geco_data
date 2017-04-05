@@ -11,6 +11,7 @@ DEFAULT_EXTENSION = ['txt']
 DEFAULT_TRENDS = ['']
 SEC_PER_DAY = 86400
 DEFAULT_MAX_CHUNK = SEC_PER_DAY
+DEFAULT_PAD = -1.
 USAGE="""
 Save channel data in a sane, interruptible, parallelizable way.
 
@@ -89,14 +90,28 @@ minute trends:
     "max_chunk_length": 3600
 }
 """
+_GREEN = '\033[92m'
+_RED   = '\033[91m'
+_CLEAR = '\033[0m'
 
 import sys
 # don't import the rest if someone just wants help
 if __name__ == '__main__':
+    check_progress = False
+    list_outfiles = False
     if len(sys.argv) != 1 and sys.argv[1] in ['-h', '--help']:
         print(USAGE)
         exit()
-import gwpy.timeseries
+    if '-p' in sys.argv:
+        sys.argv.remove('-p')
+        check_progress = True
+    if '-o' in sys.argv:
+        sys.argv.remove('-o')
+        list_outfiles = True
+# slow import; only import if we are going to use it.
+if not (__name__ == '__main__'
+        and (check_progress or list_outfiles)):
+    import gwpy.timeseries
 import gwpy.time
 import json
 import multiprocessing
@@ -140,9 +155,10 @@ class Query(object):
     def fetch(self, **kwargs):
         """Fetch the timeseries corresponding to this Query from NDS2 using
         GWpy."""
-        return gwpy.timeseries.TimeSeries.fetch(self.channel, self.start,
-                                                self.end, verbose=VERBOSE_GWPY,
-                                                **kwargs)
+        return gwpy.timeseries.TimeSeries.get(self.channel, self.start,
+                                              self.end, pad=DEFAULT_PAD,
+                                              verbose=VERBOSE_GWPY,
+                                              **kwargs)
     def read(self, **kwargs):
         """Read this timeseries from file using GWpy. If the file is not
         present, an IOError is raised, UNLESS an unsuccessful attempt has been
@@ -164,6 +180,8 @@ class Query(object):
                               '{}. Padding...').format(self))
                 raise NDS2Exception(('This query seems to have failed '
                                      'downloading: {}').format(self))
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
     def __str__(self):
         fmt = "start: {}, end: {}, channel: {}, ext: {}"
         return fmt.format(self.start, self.end, self.channel, self.ext)
@@ -323,6 +341,8 @@ class Job(object):
         processes to try to improve I/O performance, though by default, only
         runs in a single process."""
         _run_queries(self, multiproc=False)
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
     def __repr__(self):
         fmt = (type(self).__name__
                + '(start={}, end={}, channels={}, exts={}, trends={}, '
@@ -330,6 +350,13 @@ class Job(object):
         return fmt.format(repr(self.start), repr(self.end), repr(self.channels),
                           repr(self.exts), repr(self.trends),
                           repr(self.max_chunk_length))
+    @property
+    def output_filenames(self):
+        """Get the filenames for all final output files created by this job
+        (after concatenation of timeseries)."""
+        return [ Query(j.start, j.end, j.channels_with_trends[0],
+                       j.exts[0]).fname
+                     for j in self.joblets ]
     def concatenate_files(self):
         """Once all data has been downloaded for a job, concatenate that data
         based on the extension specified for the job."""
@@ -351,50 +378,20 @@ class Job(object):
                     try:
                         query = queries[starting_index]
                         data = query.read().copy()
-                        start = query.start
-                        end = query.end
+                        data_initialized = True
                     except NDS2Exception as e:
                         starting_index += 1
                 for query in queries[starting_index + 1:]:
                     try:
-                        data.append(query.read().copy(), gap='pad', pad=-1.)
-                        end = query.end
+                        data.append(query.read().copy(), gap='pad',
+                                    pad=DEFAULT_PAD)
                     except NDS2Exception:
                         pass
-                actual_query = Query(start, end, full_query.channel,
-                                     full_query.ext)
-                if not actual_query.file_exists():
-                    data.write(actual_query.fname)
-                logging.debug(('done concatenating full query: {}, resulting '
-                               'timeseries equivalent to query: '
-                               '{}').format(full_query, actual_query))
-
-def _run_queries(job, multiproc=False):
-    """Try to download all data, i.e. run all queries. Can use multiple
-    processes to try to improve I/O performance, though by default, only
-    runs in a single process. Must define this at the global level to allow
-    for multiprocessing."""
-    if multiproc:
-        mapf = multiprocessing.Pool(processes=NUM_THREADS).map
-    else:
-        mapf = map
-    mapf(_download_data_if_missing, job.queries)
-    logging.info('done downloading data.')
-
-if __name__ == '__main__':
-    check_progress = False
-    if '-p' in sys.argv:
-        sys.argv.remove('-p')
-        check_progress = True
-    if len(sys.argv) == 1:
-        jobspecfile = 'jobspec.json'
-    else:
-        jobspecfile = sys.argv[1]
-    logging.basicConfig(filename='{}.log'.format(jobspecfile),
-                        level=logging.DEBUG,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-    job = Job.load(jobspecfile)
-    if check_progress:
+                if not full_query.file_exists():
+                    data.write(full_query.fname)
+                logging.debug('done concatenating: {}'.format(full_query))
+    def current_progress(self):
+        """Print out current progress of this download."""
         print('Checking progress on job: {}'.format(job.to_dict()))
         queries = job.queries
         n_tot = len(queries)
@@ -416,6 +413,40 @@ if __name__ == '__main__':
         summary_fmt = 'SUMMARY:\n{}% done\n{}% failed\n{}% remains'
         print(summary_fmt.format(successful_percentage, failed_percentage,
                                  in_progress_percentage))
+
+def _run_queries(job, multiproc=False):
+    """Try to download all data, i.e. run all queries. Can use multiple
+    processes to try to improve I/O performance, though by default, only
+    runs in a single process. Must define this at the global level to allow
+    for multiprocessing."""
+    if multiproc:
+        mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+    else:
+        mapf = map
+    mapf(_download_data_if_missing, job.queries)
+    logging.info('done downloading data.')
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        jobspecfile = 'jobspec.json'
+    else:
+        jobspecfile = sys.argv[1]
+    logging.basicConfig(filename='{}.log'.format(jobspecfile),
+                        level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+    job = Job.load(jobspecfile)
+    if check_progress:
+        job.current_progress()
+    if list_outfiles:
+        does_exist = '[{} EXISTS {}] '.format(_GREEN, _CLEAR)
+        does_not_exist = '[{} MISSING {}]'.format(_RED, _CLEAR)
+        for f in job.output_filenames:
+            if os.path.isfile(f):
+                exists = does_exist
+            else:
+                exists = does_not_exist
+            print('{} -> {}'.format(exists, f))
+    if check_progress or list_outfiles:
         exit(0)
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))
