@@ -129,7 +129,7 @@ class Query(object):
     def __init__(self, start, end, channel, ext):
         self.start      = start
         self.end        = end
-        self.channel    = channel
+        self.channel    = str(channel)
         self.ext        = ext
     @property
     def sanitized_channel(self):
@@ -239,9 +239,9 @@ class Job(object):
                               '{} instead.').format(max_chunk_length))
         self.start              = gwpy.time.to_gps(start).gpsSeconds
         self.end                = gwpy.time.to_gps(end).gpsSeconds
-        self.channels           = channels
+        self.channels           = [ str(c) for c in channels ]
         self.exts               = exts
-        self.trends             = trends
+        self.trends             = [ str(t) for t in trends ]
         self.max_chunk_length   = max_chunk_length
         # if minute-trends are being downloaded, expand the interval so
         # that start and end times are divisible by 60.
