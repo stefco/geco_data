@@ -320,6 +320,14 @@ class Job(object):
                     for span in self.subspans 
                     for ext  in self.exts ]
     @property
+    def full_queries(self):
+        """Return a list of Queries corresponding to each channel/trend
+        combination. The full time interval for this job is used for each Query;
+        it is not split into smaller subintervals, so this list of Queries is
+        probably useless for fetching remote data."""
+        return [ Query(j.start, j.end, j.channels_with_trends[0], j.exts[0])
+                     for j in self.joblets ]
+    @property
     def joblets(self):
         """Return a bunch of jobs with a single channel, trend, and extension
         for each which, when combined, are equivalent to the total job.."""
@@ -354,9 +362,7 @@ class Job(object):
     def output_filenames(self):
         """Get the filenames for all final output files created by this job
         (after concatenation of timeseries)."""
-        return [ Query(j.start, j.end, j.channels_with_trends[0],
-                       j.exts[0]).fname
-                     for j in self.joblets ]
+        return [ q.fname for q in self.full_queries ]
     def concatenate_files(self):
         """Once all data has been downloaded for a job, concatenate that data
         based on the extension specified for the job."""
