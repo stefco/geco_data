@@ -113,6 +113,7 @@ if not (__name__ == '__main__'
         and (check_progress or list_outfiles)):
     import gwpy.timeseries
 import gwpy.time
+import numpy as np
 import json
 import multiprocessing
 import math
@@ -180,6 +181,33 @@ class Query(object):
                               '{}. Padding...').format(self))
                 raise NDS2Exception(('This query seems to have failed '
                                      'downloading: {}').format(self))
+    def read_and_split_on_missing(self, pad=DEFAULT_PAD, invert=False,
+                                  **kwargs):
+        """Read this timeseries from file using .read(), then find missing
+        values (identified by the `pad' argument, i.e. the value used to pad
+        missing space in the timeseries). Returns a list of contiguous
+        timeseries that are a subset of this query's full time interval
+        with all missing subintervals removed."""
+        t = self.read(**kwargs)
+
+        # find indices that are not just filler
+        exist = np.nonzero(t != pad)[0]
+
+        # those indices are usually in contiguous chunks. find the the indices
+        # of the edges of those chunks within the list of non-filler indices.
+        change_inds = np.argwhere(exist[1:] != exist[:-1] + 1).flatten()
+
+        # basically just flatten the list of ends/starts; these are still
+        # indices into the list of nonfiller indices rather than indices into
+        # the full timeseries itself.
+        inner_inds = [ ind for subint in [ [i,i+1] for i in change_inds ]
+                           for ind in subint ]
+        all_inds = np.concatenate([[0], inner_inds, [-1]])
+        intervals = exist[all_inds]
+        timeseries = []
+        for i in range(len(intervals) // 2):
+            timeseries.append(t[intervals[2*i]:intervals[2*i+1]+1])
+        return timeseries
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
     def __str__(self):
