@@ -181,6 +181,13 @@ class Query(object):
                               '{}. Padding...').format(self))
                 raise NDS2Exception(('This query seems to have failed '
                                      'downloading: {}').format(self))
+    @property
+    def missing_gps_times(self, pad=DEFAULT_PAD):
+        """Get a list of missing times for this query. These values are
+        floats."""
+        t = self.read()
+        missing_ind = np.nonzero(t == -1.)[0]
+        return t.times[missing_ind].value
     def read_and_split_on_missing(self, pad=DEFAULT_PAD, invert=False,
                                   **kwargs):
         """Read this timeseries from file using .read(), then find missing
