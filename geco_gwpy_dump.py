@@ -120,6 +120,7 @@ import math
 import os
 import logging
 import shutil
+import datetime
 
 class NDS2Exception(IOError):
     """An error thrown in association with some sort of failure to download
@@ -153,13 +154,19 @@ class Query(object):
     def query_failed(self):
         """check if this query failed by seeing if an fname_err file exists."""
         return os.path.isfile(self.fname_err)
-    def fetch(self, **kwargs):
-        """Fetch the timeseries corresponding to this Query from NDS2 using
-        GWpy."""
+    def get(self, **kwargs):
+        """Fetch the timeseries corresponding to this Query from NDS2 or from
+        frame files using GWpy."""
         return gwpy.timeseries.TimeSeries.get(self.channel, self.start,
                                               self.end, pad=DEFAULT_PAD,
                                               verbose=VERBOSE_GWPY,
                                               **kwargs)
+    def fetch(self, **kwargs):
+        """Get the timeseries corresponding to this Query explicitly from NDS2.
+        There is no option to pad missing values using this method."""
+        return gwpy.timeseries.TimeSeries.fetch(self.channel, self.start,
+                                                self.end, verbose=VERBOSE_GWPY,
+                                                **kwargs)
     def read(self, **kwargs):
         """Read this timeseries from file using GWpy. If the file is not
         present, an IOError is raised, UNLESS an unsuccessful attempt has been
@@ -188,6 +195,50 @@ class Query(object):
         t = self.read()
         missing_ind = np.nonzero(t == -1.)[0]
         return t.times[missing_ind].value
+    def fill_in_missing_m_trend(self, pad='DEFAULT_PAD', **kwargs):
+        """Missing m-trend data can often be filled in with s-trend data in
+        cases where the m-trend fails to generate for some reason. This function
+        takes a saved, completed query, loads the completely downloaded
+        timeseries from disk, identifies missing values, fetches the s-trend
+        for the missing minutes, generates m-trend values, and then saves the
+        filled-in timeseries to disk."""
+        buf = self.read()
+        chan = buf.channel.name.split('.')
+        if (len(chan) == 1) or (',' in chan[1]):
+            raise ValueError('Tried running with non m-trend')
+        chan, trend = chan # for m-trend, 'm-trend' implicit in trend extension
+        missing_times = [int(x) for x in self.missing_gps_times]
+        # rename original file so that we don't overwrite it
+        now = datetime.datetime.now().isoformat()
+        backup_fname = 'with-missing-{}-{}'.format(now, self.fname)
+        os.rename(self.fname, backup_fname)
+        # download the s-trend 1 minute at a time
+        for t in missing_times:
+            squery = type(self)(t, t+60, chan, ','.join([trend, 's-trend']))
+            logging.debug('Fetching missing m-trend: {}'.format(squery))
+            missing_buf = squery.fetch() # explicitly fetch from NDS2
+            # make m-trend value for this minute based on trend extension
+            if len(np.nonzero(missing_buf == -1)[0]) != 0:
+                logging.warn('Still missing data in {}'.format(squery))
+            elif trend == 'mean':
+                buf_trend = missing_buf.mean()
+            elif trend == 'min':
+                buf_trend = missing_buf.min()
+            elif trend == 'max':
+                buf_trend = missing_buf.max()
+            elif trend == 'rms':
+                buf_trend = missing_buf.rms()
+            elif trend == 'n':
+                buf_trend = missing_buf.sum()
+            else:
+                raise ValueError('Unrecognized trend type: {}'.format(trend))
+            # replace missing value in loaded trend data
+            missing_ind = np.argwhere(buf.times.value == t)[0][0]
+            buf[missing_ind] = buf_trend
+            # write to file, overwriting old file
+            if os.path.isfile(self.fname):
+                os.remove(self.fname)
+            buf.write(self.fname)
     def read_and_split_on_missing(self, pad=DEFAULT_PAD, invert=False,
                                   **kwargs):
         """Read this timeseries from file using .read(), then find missing
@@ -236,7 +287,7 @@ class Query(object):
         if not query.file_exists():
             logging.debug("{} not found, running query.".format(repr(query)))
             try:
-                data = query.fetch()
+                data = query.get()
                 logging.info("query succeeded: {} saving to file".format(query))
                 data.write(query.fname)
             except RuntimeError as e:
