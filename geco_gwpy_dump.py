@@ -195,6 +195,30 @@ class Query(object):
         t = self.read()
         missing_ind = np.nonzero(t == -1.)[0]
         return t.times[missing_ind].value
+    def _get_missing_m_trend(self, pad='DEFAULT_PAD', **kwargs):
+        """Get a single second of missing data."""
+        logging.debug('Fetching missing m-trend: {}'.format(self))
+        missing_buf = self.fetch() # explicitly fetch from NDS2
+        trend = self.channel.split('.')[1].split(',')[0]
+        # make m-trend value for this minute based on trend extension
+        if len(np.nonzero(missing_buf == -1)[0]) != 0:
+            # this won't actually check for anything at the moment because
+            # gwpy.timeseries.TimeSeries.fetch() does not have a padding option
+            # yet
+            logging.warn('Still missing data in {}'.format(self))
+        elif trend == 'mean':
+            buf_trend = missing_buf.mean()
+        elif trend == 'min':
+            buf_trend = missing_buf.min()
+        elif trend == 'max':
+            buf_trend = missing_buf.max()
+        elif trend == 'rms':
+            buf_trend = missing_buf.rms(60)[0]
+        elif trend == 'n':
+            buf_trend = missing_buf.sum()
+        else:
+            raise ValueError('Unrecognized trend type: {}'.format(trend))
+        return buf_trend
     def fill_in_missing_m_trend(self, pad='DEFAULT_PAD', **kwargs):
         """Missing m-trend data can often be filled in with s-trend data in
         cases where the m-trend fails to generate for some reason. This function
@@ -211,27 +235,12 @@ class Query(object):
         # rename original file so that we don't overwrite it
         now = datetime.datetime.now().isoformat()
         backup_fname = 'with-missing-{}-{}'.format(now, self.fname)
-        os.rename(self.fname, backup_fname)
+        shutil.copyfile(self.fname, backup_fname)
         # download the s-trend 1 minute at a time
         for t in missing_times:
-            squery = type(self)(t, t+60, chan, ','.join([trend, 's-trend']))
-            logging.debug('Fetching missing m-trend: {}'.format(squery))
-            missing_buf = squery.fetch() # explicitly fetch from NDS2
-            # make m-trend value for this minute based on trend extension
-            if len(np.nonzero(missing_buf == -1)[0]) != 0:
-                logging.warn('Still missing data in {}'.format(squery))
-            elif trend == 'mean':
-                buf_trend = missing_buf.mean()
-            elif trend == 'min':
-                buf_trend = missing_buf.min()
-            elif trend == 'max':
-                buf_trend = missing_buf.max()
-            elif trend == 'rms':
-                buf_trend = missing_buf.rms()
-            elif trend == 'n':
-                buf_trend = missing_buf.sum()
-            else:
-                raise ValueError('Unrecognized trend type: {}'.format(trend))
+            full_trend = ','.join([trend, 's-trend'])
+            squery = type(self)(t, t+60, '.'.join([chan, full_trend]), self.ext)
+            buf_trend = squery._get_missing_m_trend(pad=pad, **kwargs)
             # replace missing value in loaded trend data
             missing_ind = np.argwhere(buf.times.value == t)[0][0]
             buf[missing_ind] = buf_trend
@@ -482,6 +491,15 @@ class Job(object):
                 if not full_query.file_exists():
                     data.write(full_query.fname)
                 logging.debug('done concatenating: {}'.format(full_query))
+    def fill_in_missing_m_trend(self):
+        """Iterate through channel and trend extension combinations and fill in
+        missing data due to malformed minute trends. This should ONLY be run
+        after all data has been downloaded using the conventional approach.
+        See Query.fill_in_missing_m_trend() for a full description of what this
+        entails."""
+        for q in self.full_queries:
+            logging.info('Filling in missing m-trend values for {}'.format(q))
+            q.fill_in_missing_m_trend()
     def current_progress(self):
         """Print out current progress of this download."""
         print('Checking progress on job: {}'.format(job.to_dict()))
