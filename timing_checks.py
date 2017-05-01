@@ -136,6 +136,7 @@ def try_making_overlay_plots(gpstime, eventdir):
 def main(gpstime, graceid):
     """Generate missing files."""
     eventdir = os.path.expanduser('~/public_html/events/{}'.format(graceid))
+    print('Starting at {}'.format(datetime.datetime.now().isoformat()))
     if not os.path.isdir(eventdir):
         os.makedirs(eventdir)
     os.chdir(eventdir)
