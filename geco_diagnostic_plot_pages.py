@@ -4,8 +4,8 @@
 DESC="""Plot a list of timing diagnostic channels, which will be read from
 stdin as a newline-delimited channel list, for a time window around a given
 GPS time. This script can also generate a summary webpage for easy viewing of
-plot results. Use this script when there is a glitch to make plots on a bunch
-of timing channels to quickly find the source of the problem."""
+plot results. Use this script when there is a timing error to make plots on a
+bunch of timing channels to quickly find the source of the problem."""
 DT = 30
 MAX_SIMULTANEOUS_CHANS = 5
 
@@ -19,8 +19,8 @@ if __name__ == "__main__":
                         help=("The GPS time about which the plots should be"
                               "centered."))
     parser.add_argument("-o", "--outdir", default=".",
-                        help=("Where should the files be saved? Defaults to the"
-                              "current directory."))
+                        help=("Where should the files be saved? Defaults to "
+                              "the current directory."))
     parser.add_argument("-l", "--channellist",
                         help=("Path to a text file containing the list of"
                               "channels to plot. If not provided, this script"
