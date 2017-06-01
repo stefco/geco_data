@@ -8,22 +8,29 @@ VERBOSE_GWPY = True
 ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
 DEFAULT_EXTENSION = ['txt']
 # by default, download full data, i.e. no trend extension
+DEFAULT_FLAGS = ["H1:DMT-ANALYSIS_READY:1", "L1:DMT-ANALYSIS_READY:1"]
 DEFAULT_TRENDS = ['']
 SEC_PER_DAY = 86400
 DEFAULT_MAX_CHUNK = SEC_PER_DAY
 DEFAULT_PAD = -1.
+INDEX_MISSING_FMT = ('{} index not found for segment {} of {}, time {}\n'
+                     'Setting {} index to {}.')
 USAGE="""
 Save channel data in a sane, interruptible, parallelizable way.
 
 Usage:
 
-Start downloading:
+Start downloading data specified in jobspec.json:
 
     geco_gwpy_dump
 
-Check progress:
+Check incremental progress of download:
 
     geco_gwpy_dump -p
+
+List final output filenames and whether they exist or not:
+
+    geco_gwpy_dump -o
 
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
@@ -112,6 +119,7 @@ if __name__ == '__main__':
 if not (__name__ == '__main__'
         and (check_progress or list_outfiles)):
     import gwpy.timeseries
+    import gwpy.segments
 import gwpy.time
 import numpy as np
 import json
@@ -275,6 +283,61 @@ class Query(object):
         for i in range(len(intervals) // 2):
             timeseries.append(t[intervals[2*i]:intervals[2*i+1]+1])
         return timeseries
+    @property
+    def trend(self):
+        """Get the trend extension for this query by splitting the channel
+        name on the period. Will give results like ``'.mean,m-trend'``.
+        Returns a blank string if there is no trend specified, i.e. full
+        data."""
+        if len(self.channel.split('.')) == 1:
+            return ''
+        else:
+            return self.channel.split('.')[1]
+    @property
+    def channel_sans_trend(self):
+        """Get the channel name with any trend extension, e.g.
+        ``'.mean,m-trend'``, removed; this is the channel name as it should
+        appear in a ``Job`` specification."""
+        return self.channel.split('.')[0]
+    def read_and_split_into_segments(self, dq_flag_segments):
+        """Read this timeseries from file using ``.read()`` and split it into
+        a list of subintervals that overlap with the provided
+        ``dq_flag_segments``. ``dq_flag_segments`` must be an instance of
+        ``gwpy.segments.DataQualityFlag``. Assumes m-trend for now."""
+        # make sure this query is an m-trend; the code assumes this.
+        if not 'm-trend' in self.trend:
+            msg = 'Can only read and split m-trends by dq_flag.'
+            logging.error(msg)
+            raise ValueError(msg)
+        # read in the timeseries
+        t = self.read()
+        n_segs = len(dq_flag_segments.active)
+        t_subintervals = []
+        for i_seg, seg in enumerate(dq_flag_segments.active):
+            # this next bit seems to be necessary due to a bug; IIRC, one time
+            # value might appear as text data rather than numerical data,
+            # forcing this stupid kludgy conversion.
+            start = gwpy.time.to_gps(seg.start).gpsSeconds
+            end = gwpy.time.to_gps(seg.end).gpsSeconds
+            # the start index for this segment might be outside the full timeseries
+            try:
+                i_start = np.argwhere(t.times.value==(start // 60 * 60))[0][0]
+            except IndexError:
+                i_start = 0
+                msg = INDEX_MISSING_FMT.format('Start', i_seg, n_segs,
+                                               start, 'start', i_start)
+                logging.info(msg)
+            # the end index for this segment might be outside the full timeseries
+            try:
+                i_end = np.argwhere(t.times.value==(end // 60 * 60 + 60))[0][0]
+            except IndexError:
+                # just pick the index of the last value in t.times
+                i_end   = len(t.times) - 1
+                msg = INDEX_MISSING_FMT.format('End', i_seg, n_segs,
+                                               end, 'end', i_end)
+                logging.info(msg)
+            t_subintervals.append(t[i_start:i_end+1])
+        return t_subintervals
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
     def __str__(self):
@@ -316,9 +379,14 @@ def _download_data_if_missing(query):
     Query._download_data_if_missing(query)
 
 class Job(object):
-    """A description of a data downloading job."""
+    """A description of a data downloading job. Contains information on which
+    time ranges should be downloaded, which channels and statistical trends
+    should be downloaded, and which data quality (dq) flags should be
+    downloaded. Provides methods for safely downloading required data in chunks
+    and filling in missing values."""
     def __init__(self, start, end, channels, exts=DEFAULT_EXTENSION,
-                 trends=DEFAULT_TRENDS, max_chunk_length=DEFAULT_MAX_CHUNK):
+                 dq_flags=DEFAULT_FLAGS, trends=DEFAULT_TRENDS,
+                 max_chunk_length=DEFAULT_MAX_CHUNK):
         """Start and end times can be specified as either integer GPS times or
         as human-readable time strings that are parsable by gwpy.time.to_gps.
         max_chunk_length is measured in seconds and must be a multiple of 60."""
@@ -337,6 +405,7 @@ class Job(object):
         self.channels           = [ str(c) for c in channels ]
         self.exts               = exts
         self.trends             = [ str(t) for t in trends ]
+        self.dq_flags           = dq_flags
         self.max_chunk_length   = max_chunk_length
         # if minute-trends are being downloaded, expand the interval so
         # that start and end times are divisible by 60.
@@ -353,7 +422,7 @@ class Job(object):
         # there are some optional parameters that we will only pass to the
         # __init__ method if they are included in the JSON.
         kwargs = {}
-        for optional_key in ['exts', 'trends', 'max_chunk_length']:
+        for optional_key in ['dq_flags', 'exts', 'trends', 'max_chunk_length']:
             if optional_key in d:
                 kwargs[optional_key] = d[optional_key]
         # start and end cannot be unicode strings because GWpy complains
@@ -373,6 +442,7 @@ class Job(object):
                  'end':                 self.end,
                  'channels':            self.channels,
                  'exts':                self.exts,
+                 'dq_flags':            self.dq_flags,
                  'trends':              self.trends,
                  'max_chunk_length':    self.max_chunk_length }
     def save(self, jobspecfile):
@@ -401,7 +471,9 @@ class Job(object):
         return spans
     @property
     def channels_with_trends(self):
-        """get all combinations of channels and trend extensions in this job."""
+        """get all combinations of channels and trend extensions in this job.
+        returns a list of channel and trend pairs, each of the form
+        [ channel, trend ]."""
         chans = [ c + t
                     for c in self.channels
                     for t in self.trends   ]
@@ -410,7 +482,8 @@ class Job(object):
     @property
     def queries(self):
         """Return a list of Queries that are necessary to execute this job."""
-        return [ Query(span[0], span[1], chan, ext)
+        return [ Query(start = span[0], end = span[1], channel = chan,
+                       ext = ext)
                     for chan in self.channels_with_trends
                     for span in self.subspans 
                     for ext  in self.exts ]
@@ -420,14 +493,16 @@ class Job(object):
         combination. The full time interval for this job is used for each Query;
         it is not split into smaller subintervals, so this list of Queries is
         probably useless for fetching remote data."""
-        return [ Query(j.start, j.end, j.channels_with_trends[0], j.exts[0])
+        return [ Query(start = j.start, end = j.end,
+                       channel = j.channels_with_trends[0], ext = j.exts[0])
                      for j in self.joblets ]
     @property
     def joblets(self):
         """Return a bunch of jobs with a single channel, trend, and extension
         for each which, when combined, are equivalent to the total job.."""
-        return [ type(self)(self.start, self.end, [chan], [ext], [trend],
-                               self.max_chunk_length)
+        return [ type(self)(self.start, self.end, [chan], exts = [ext], 
+                            dq_flags = self.dq_flags, trends = [trend],
+                            max_chunk_length = self.max_chunk_length)
                     for chan in self.channels
                     for ext in self.exts
                     for trend in self.trends ]
@@ -448,11 +523,11 @@ class Job(object):
         return self.__dict__ == other.__dict__
     def __repr__(self):
         fmt = (type(self).__name__
-               + '(start={}, end={}, channels={}, exts={}, trends={}, '
-               +  'max_chunk_length={})')
+               + '(start={}, end={}, channels={}, exts={}, dq_flags={}, '
+               +  'trends={}, max_chunk_length={})')
         return fmt.format(repr(self.start), repr(self.end), repr(self.channels),
-                          repr(self.exts), repr(self.trends),
-                          repr(self.max_chunk_length))
+                          repr(self.exts), repr(self.dq_flags),
+                          repr(self.trends), repr(self.max_chunk_length))
     @property
     def output_filenames(self):
         """Get the filenames for all final output files created by this job
@@ -462,8 +537,9 @@ class Job(object):
         """Once all data has been downloaded for a job, concatenate that data
         based on the extension specified for the job."""
         for joblet in self.joblets:
-            full_query = Query(joblet.start, joblet.end,
-                               joblet.channels_with_trends[0], joblet.exts[0])
+            full_query = Query(start = joblet.start, end = joblet.end,
+                               channel = joblet.channels_with_trends[0], 
+                               ext = joblet.exts[0])
             if full_query.file_exists():
                 logging.info(('This joblet has already been concatenated, '
                               'skipping: {}').format(joblet))
@@ -502,28 +578,92 @@ class Job(object):
             q.fill_in_missing_m_trend()
     def current_progress(self):
         """Print out current progress of this download."""
-        print('Checking progress on job: {}'.format(job.to_dict()))
+        print('{}Checking progress on job{}: {}'.format(_GREEN, _CLEAR,
+                                                        job.to_dict()))
         queries = job.queries
         n_tot = len(queries)
-        print('Total downloads needed: {}'.format(n_tot))
+        print(_RED + 'NOTE that below values only show incremental progress,')
+        print('not finished files! If you have the finished files already,')
+        print('then you probably don\'t need all of the partial downloads.')
+        print('You can check whether the final outputs of this job have been')
+        print('downloaded by using the -o flag.' + _CLEAR)
+        print('{}Total downloads needed:{} {}'.format(_GREEN, _CLEAR, n_tot))
         successful = filter(lambda q: q.file_exists(), queries)
         successful_percentage = len(successful) * 100. / n_tot
-        print('Successful downloads: {}'.format(len(successful)))
+        print('{}Successful downloads{}: {}'.format(_GREEN, _CLEAR,
+                                                    len(successful)))
         not_done = filter(lambda q: not q.file_exists(), queries)
         failed = filter(lambda q: q.query_failed(), not_done)
         failed_percentage = len(failed) * 100. / n_tot
-        print('Failed downloads: {}'.format(len(failed)))
+        print('{}Failed downloads{}: {}'.format(_GREEN, _CLEAR,
+                                                len(failed)))
         failed_times = set([(q.start, q.end) for q in failed])
-        print('Failed timespans:')
+        print('{}Failed timespans{}:'.format(_GREEN, _CLEAR))
         for f in failed_times:
             print('    {}'.format(f))
         in_progress = filter(lambda q: not q.query_failed(), not_done)
         in_progress_percentage = len(in_progress) * 100. / n_tot
-        print('In progress downloads: {}'.format(len(in_progress)))
-        summary_fmt = 'SUMMARY:\n{}% done\n{}% failed\n{}% remains'
-        print(summary_fmt.format(successful_percentage, failed_percentage,
-                                 in_progress_percentage))
-
+        print('{}In progress downloads{}: {}'.format(_GREEN, _CLEAR,
+                                                     len(in_progress)))
+        summary_fmt = '{}SUMMARY{}:\n{}% done\n{}% failed\n{}% remains'
+        print(summary_fmt.format(_GREEN, _CLEAR, successful_percentage,
+                                 failed_percentage, in_progress_percentage))
+    @property
+    def segment_filename(self):
+        """The filename of HDF5 file that holds the segments specified in this
+        job (and any other job with the same start and end)."""
+        return "{}-{}-segments.hdf5".format(self.start, self.end)
+    def fetch_dq_segments(self):
+        """Download data quality segments into a gwpy.DataQualityDict using
+        that class's ``query`` method for the full timespan of this job."""
+        return gwpy.segments.DataQualityDict.query(self.dq_flags, self.start,
+                                                   self.end)
+    def read_dq_segments(self):
+        """Read the segments for this job from an HDF5 file, throwing an
+        IOError if not all DataQualityFlags are present in the saved file."""
+        segs = gwpy.segments.DataQualityDict.read(self.segment_filename)
+        if set(self.dq_flags).issubset(segs.keys()):
+            # remove extraneous dq_flags
+            extraneous_keys = set(segs.keys()) - set(self.dq_flags)
+            for extraneous_key in extraneous_keys:
+                segs.pop(extraneous_key)
+            return segs
+        else:
+            raise IOError('Not all DataQualityFlags present for this job.')
+    def get_dq_segments(self):
+        """Download data quality segments and save them to an HDF5 formatted
+        file. If that file already exists and has all required segments,
+        just load from the file. Returns a DataQualityDict containing
+        all DataQualityFlags specified for this job over the entire time
+        interval specified by this job."""
+        # if a segments file already exists for this time interval, just
+        # fetch the missing dq_flags and add them in.
+        if os.path.isfile(self.segment_filename):
+            segs = gwpy.segments.DataQualityDict.read(self.segment_filename)
+            missing_keys = set(self.dq_flags) - set(segs.keys())
+            # if there are missing keys, query server
+            if not len(missing_keys) == 0:
+                missing = gwpy.segments.DataQualityDict.query(missing_keys,
+                                                              self.start,
+                                                              self.end)
+                # add missing values into the previously saved DataQualityDict
+                for key in missing:
+                    segs[key] = missing[key]
+                # save the combined DataQualityDict, renaming the old copy with
+                # '.orig' appended
+                os.rename(self.segment_filename,
+                          '{}.orig'.format(self.segment_filename))
+                segs.write(self.segment_filename)
+        # otherwise, just get the segments and save them.
+        else:
+            segs = self.fetch_dq_segments()
+            segs.write(self.segment_filename)
+        # remove extraneous keys that are not included in this ``Job``'s
+        # dq_flags
+        extraneous_keys = set(segs.keys()) - set(self.dq_flags)
+        for extraneous_key in extraneous_keys:
+            segs.pop(extraneous_key)
+        return segs
 def _run_queries(job, multiproc=False):
     """Try to download all data, i.e. run all queries. Can use multiple
     processes to try to improve I/O performance, though by default, only
@@ -537,14 +677,19 @@ def _run_queries(job, multiproc=False):
     logging.info('done downloading data.')
 
 if __name__ == '__main__':
+    # specify the job specification file to load
     if len(sys.argv) == 1:
         jobspecfile = 'jobspec.json'
     else:
         jobspecfile = sys.argv[1]
+    # set up logging
     logging.basicConfig(filename='{}.log'.format(jobspecfile),
                         level=logging.DEBUG,
                         format='%(asctime)s - %(levelname)s - %(message)s')
     job = Job.load(jobspecfile)
+    # see if we are supposed to do something besides download the data
+    # (argparse is used at the start of the script to set these variables based
+    # on command line arguments passed in)
     if check_progress:
         job.current_progress()
     if list_outfiles:
