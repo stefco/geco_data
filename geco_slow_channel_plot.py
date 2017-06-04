@@ -1,8 +1,10 @@
-17-6-2 geco_slow_channel_plot.py
-
 #!/usr/bin/env python
 # (c) Stefan Countryman 2017
 
+import matplotlib
+if __name__ == '__main__':
+    # necessary for headless plotting
+    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import geco_gwpy_dump
@@ -22,12 +24,6 @@ COMBINED_TRENDS = [
     ".rms,m-trend",
     ".n,m-trend"
 ]
-
-if __name__ == '__main__':
-    if len(sys.argv) == 1:
-        job = geco_gwpy_dump.Job.load()
-    else:
-        job = geco_gwpy_dump.Job.load(sys.argv[1])
 
 class PlottingJob(object):
     """A description of the plots that need to be made along with methods
@@ -111,6 +107,7 @@ class PlottingJob(object):
         its own plot."""
         for plotter in self.individual_plotters:
             plotter.save_plot()
+    @property
     def combined_plotters(self):
         """Return a list of ``CombinedPlotter``s for this job."""
         plotters = []
@@ -163,7 +160,7 @@ class Plotter(object):
         - central times (times)
         - number of sample values per segment (ns)"""
         ts = self.read()
-        stats = []
+        stats = {}
         for q in self.queries:
             ch = q.channel
             means = np.array([t.mean().value for t in ts[ch]])
@@ -262,10 +259,10 @@ class IndividualPlotter(Plotter):
         # get the statistics for this one channel (the only one we will plot)
         s = self.stats[self.queries[0].channel]
         # plot everything
-        mean = f.gca().errorbar(s.times, s.means, marker="o", color="black",
-                                yerr=s.stds)
-        mins = f.gca().plot(s.times, s.mins, marker="v", color="red")
-        maxs = f.gca().plot(s.times, s.maxs, marker="^", color="blue")
+        mean = fig.gca().errorbar(s.times, s.means, marker="o", color="black",
+                                  yerr=s.stds)
+        mins = fig.gca().plot(s.times, s.mins, marker="v", color="red")
+        maxs = fig.gca().plot(s.times, s.maxs, marker="^", color="blue")
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
@@ -277,10 +274,10 @@ class IndividualPlotter(Plotter):
             fmt = '{} from {} to {}\nduring {} Segments for {} (trend: {})'
             title = fmt.format(self.channel_description, start, end,
                                self.dq_flag, self.run, self.trends[0])
-        f.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
-                                                     "Minima", "Maxima"])
-        f.gca().set_title(title)
-        return f
+        fig.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
+                                                       "Minima", "Maxima"])
+        fig.gca().set_title(title)
+        return fig
 
 class CombinedPlotter(Plotter): #TODO
     """A class for plotting a slow channel with all trends. Used when all trends are available to generate a combined plot for a channel over some period of time."""
@@ -310,16 +307,16 @@ class CombinedPlotter(Plotter): #TODO
             fig = plt.figure()
         # calculate statistics for each channel and dq_flag active segment
         s = self.stats
-        absmaxs = s['.max,m-trend'].maxs
-        absmins = s['.min,m-trend'].mins
-        means   = s['.mean,m-trend'].means
-        times   = s['.mean,m-trend'].times
-        stds    = s['.mean,m-trend'].stds
+        absmaxs = s[self.channel + '.max,m-trend'].maxs
+        absmins = s[self.channel + '.min,m-trend'].mins
+        means   = s[self.channel + '.mean,m-trend'].means
+        times   = s[self.channel + '.mean,m-trend'].times
+        stds    = s[self.channel + '.mean,m-trend'].stds
         # plot everything
-        mean = f.gca().errorbar(times, means, marker="o", color="black",
-                                yerr=stds)
-        mins = f.gca().plot(times, absmins, marker="v", color="red")
-        maxs = f.gca().plot(times, absmaxs, marker="^", color="blue")
+        mean = fig.gca().errorbar(times, means, marker="o", color="black",
+                                  yerr=stds)
+        mins = fig.gca().plot(times, absmins, marker="v", color="red")
+        maxs = fig.gca().plot(times, absmaxs, marker="^", color="blue")
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
@@ -331,55 +328,19 @@ class CombinedPlotter(Plotter): #TODO
             fmt = '{} from {} to {}\nduring {} Segments'
             title = fmt.format(self.channel_description, start, end,
                                self.dq_flag, self.run)
-        f.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
-                                                     "Absolute Minima",
-                                                     "Absolute Maxima"])
-        f.gca().set_title(title)
-        return f
+        fig.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
+                                                       "Absolute Minima",
+                                                       "Absolute Maxima"])
+        fig.gca().set_title(title)
+        return fig
 
-#INDEX_MISSING_FMT = ('{} index not found for segment {} of {}, time {}\n'
-#                     'Setting {} index to {}.')
-#for i, q in enumerate(job.full_queries):
-#   means = np.ndarray(len(segs.active))
-#   mins  = np.ndarray(len(segs.active))
-#   maxs  = np.ndarray(len(segs.active))
-#   stds  = np.ndarray(len(segs.active))
-#   times = np.ndarray(len(segs.active))
-#   t = q.read()
-#   for ii, s in enumerate(segs.active):
-#       # this next bit seems to be necessary due to a bug; IIRC, one time
-#       # value might appear as text data rather than numerical data, forcing
-#       # this stupid kludgy conversion.
-#       start = gwpy.time.to_gps(s.start).gpsSeconds
-#       end = gwpy.time.to_gps(s.end).gpsSeconds
-#       # the start index for this segment might be outside the full timeseries
-#       try:
-#           i_start = np.argwhere(t.times.value == (start // 60 * 60))[0][0]
-#       except IndexError:
-#           i_start = 0
-#           print(INDEX_MISSING_FMT.format('Start', ii, len(segs.active),
-#                                          start, 'start', i_start))
-#       # the end index for this segment might be outside the full timeseries
-#       try:
-#           i_end   = np.argwhere(t.times.value == (end // 60 * 60 + 60))[0][0]
-#       except IndexError:
-#           # just pick the index of the last value in t.times
-#           i_end   = len(t.times) - 1
-#           print(INDEX_MISSING_FMT.format('End', ii, len(segs.active),
-#                                          end, 'end', i_end))
-#       tt = t[i_start:i_end+1]
-#       means[ii] = tt.mean().value
-#       mins[ii]  = tt.min().value
-#       maxs[ii]  = tt.max().value
-#       stds[ii]  = tt.std().value
-#       times[ii] = tt.times.mean().value
-#   f = plt.figure(i)
-#   f.gca().plot(times, means, marker="o", color="black")
-#   f.gca().plot(times, mins, marker="v", color="red")
-#   f.gca().plot(times, maxs, marker="^", color="blue")
-#   f.gca().plot(times, maxs-stds, marker="1", color="pink")
-#   f.gca().plot(times, maxs+stds, marker="2", color="teal")
-#   f.gca().set_title('{} from {} to {}'.format(t.channel.name,
-#                                         gwpy.time.from_gps(j.start),
-#                                         gwpy.time.from_gps(j.end)))
-#   f.savefig('{}__{}__{}.png'.format(q.start, q.end, q.sanitized_channel))
+def main():
+    if len(sys.argv) == 1:
+        plt_job = PlottingJob.load()
+    else:
+        plt_job = PlottingJob.load(sys.argv[1])
+    pj.pj.make_combined_plots()
+    pj.pj.make_individual_plots()
+
+if __name__ == "__main__":
+    main()
