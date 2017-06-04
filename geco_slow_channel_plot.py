@@ -1,3 +1,5 @@
+17-6-2 geco_slow_channel_plot.py
+
 #!/usr/bin/env python
 # (c) Stefan Countryman 2017
 
@@ -9,9 +11,17 @@ import gwpy.time
 import collections
 import json
 import sys
+import abc
 
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
+COMBINED_TRENDS = [
+    ".mean,m-trend",
+    ".min,m-trend",
+    ".max,m-trend",
+    ".rms,m-trend",
+    ".n,m-trend"
+]
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
@@ -80,12 +90,119 @@ class PlottingJob(object):
     def trends(self):
         return self.job.trends
     @property
-    def plotters(self): #TODO
-    def make_individual_plots(self): #TODO
-    def combined_plotters(self): #TODO
-    def make_combined_plots(self): #TODO
+    def individual_plotters(self):
+        """Return a list of ``IndividualPlotter``s for this job."""
+        plotters = []
+        for trend in self.trends:
+            for dq_flag_channel_pair in self.dq_flag_channel_pairs:
+                dq_flag = dq_flag_channel_pair[0]
+                channel = dq_flag_channel_pair[1]
+                desc = self.channel_descriptions[channel]
+                # only need the first extension since any should have saved data
+                p = IndividualPlotter(start = self.start, end = self.end,
+                                      channel = channel, dq_flag = dq_flag,
+                                      trend = trend, ext = self.exts[0],
+                                      run = self.run,
+                                      channel_description = desc)
+                plotters.append(p)
+        return plotters
+    def make_individual_plots(self):
+        """Save all individual plots, i.e. every channel and every dq_flag gets
+        its own plot."""
+        for plotter in self.individual_plotters:
+            plotter.save_plot()
+    def combined_plotters(self):
+        """Return a list of ``CombinedPlotter``s for this job."""
+        plotters = []
+        for dq_flag_channel_pair in self.dq_flag_channel_pairs:
+            dq_flag = dq_flag_channel_pair[0]
+            channel = dq_flag_channel_pair[1]
+            desc = self.channel_descriptions[channel]
+            # only need the first extension since any should have saved data
+            p = CombinedPlotter(start = self.start, end = self.end,
+                                channel = channel, dq_flag = dq_flag,
+                                ext = self.exts[0], run = self.run,
+                                channel_description = desc)
+            plotters.append(p)
+        return plotters
+    def make_combined_plots(self):
+        """Save all individual plots, i.e. every channel and every dq_flag gets
+        its own plot."""
+        for plotter in self.combined_plotters:
+            plotter.save_plot()
 
 class Plotter(object):
+    """An abstract class for defining plotting jobs."""
+    __metaclass__ = abc.ABCMeta
+    @property
+    def job(self):
+        """Get the ``geco_gwpy_dump.Job`` corresponding to this ``Plotter``."""
+        return geco_gwpy_dump.Job(start = self.start, end = self.end,
+                                  channels = [self.channel], exts = [self.ext],
+                                  dq_flags = [self.dq_flag],
+                                  trends = self.trends)
+    @property
+    def queries(self):
+        """Get the ``geco_gwpy_dump.Query`` objects corresponding to this
+        ``Plotter``."""
+        return self.job.full_queries
+    # define a named tuple for returning the statistics
+    Stats = collections.namedtuple('Stats', ['means', 'mins', 'maxs',
+                                             'stds', 'times', 'ns'])
+    @property
+    def stats(self):
+        """Return a dictionary with channel/trend combinations as the keys
+        and values corresponding to the following statistics on that
+        channel/trend's timeseries, where the values are calculated for each
+        time segments when this Plotter's ``DataQualityFlag`` was active:
+        
+        - means (means)
+        - mins (mins)
+        - maxs (maxs)
+        - standard deviations (stds)
+        - central times (times)
+        - number of sample values per segment (ns)"""
+        ts = self.read()
+        stats = []
+        for q in self.queries:
+            ch = q.channel
+            means = np.array([t.mean().value for t in ts[ch]])
+            mins  = np.array([t.min().value for t in ts[ch]])
+            maxs  = np.array([t.max().value for t in ts[ch]])
+            stds  = np.array([t.std().value for t in ts[ch]])
+            times = np.array([t.times.mean().value for t in ts[ch]])
+            ns    = np.array([len(t) for t in ts[ch]])
+            s = self.Stats(means=means, mins=mins, maxs=maxs, stds=stds,
+                           times=times, ns=ns) 
+            stats[ch] = s
+        return stats
+    @property
+    def dq_segments(self):
+        """Get the ``gwpy.segments.DataQualityFlag`` time segments
+        corresponding to this ``Plotter``."""
+        return self.job.get_dq_segments()[self.dq_flag]
+    def save_plot(self):
+        """Save this plot as an image file."""
+        self.get_plot().savefig(self.fname)
+    def read(self):
+        """Read a dict of lists of timeseries for this channel corresponding to
+        the channel/trend combinations loaded time intervals when this
+        Plotter's ``DataQualityFlag`` was active. The dictionary key is just
+        the full channel/trend combination."""
+        ts = {}
+        for q in self.queries:
+            ts[q.channel] = q.read_and_split_into_segments(self.dq_segments)
+        return ts
+    @abc.abstractproperty
+    def fname(self):
+        """Return the filename for this plot"""
+    @abc.abstractmethod
+    def get_plot(self, fig=None):
+        """Generate a ``matplotlib.figure.Figure`` for the channel and
+        dq_flag specified in this ``Plotter``. Optionally pass an existing
+        figure as an argument to plot to that figure's axes."""
+
+class IndividualPlotter(Plotter):
     """Defines the parameters of a specific slow channel plot and provides
     methods for working with that plot's data and generating the plot
     itself. ``run`` and ``channel_description`` arguments are used to help
@@ -128,87 +245,97 @@ class Plotter(object):
         self.end = end
         self.channel = channel
         self.dq_flag = dq_flag
-        self.trend = trend
+        self.trends = [trend]
         self.ext = ext
         self.run = run
         self.channel_description = channel_description
     @property
-    def job(self):
-        """Get the ``geco_gwpy_dump.Job`` corresponding to this ``Plotter``."""
-        return geco_gwpy_dump.Job(start = self.start, end = self.end,
-                                  channels = [self.channel], exts = [self.ext],
-                                  dq_flags = [self.dq_flag],
-                                  trends = [self.trend])
-    @property
-    def query(self):
-        """Get the ``geco_gwpy_dump.Query`` corresponding to this
-        ``Plotter``."""
-        return self.job.full_queries[0]
-    @property
-    def dq_segments(self):
-        """Get the ``gwpy.segments.DataQualityFlag`` time segments
-        corresponding to this ``Plotter``."""
-        return self.job.get_dq_segments()[self.dq_flag]
-    def read(self):
-        """Read a list of timeseries for this channel corresponding to the
-        time intervals when this Plotter's ``DataQualityFlag`` was active."""
-        return self.query.read_and_split_into_segments(self.dq_segments)
-    # define a named tuple for returning the statistics
-    Stats = collections.namedtuple('Stats', ['ts', 'means', 'mins', 'maxs',
-                                             'stds', 'times', 'ns'])
-    def stats(self):
-        """Return the following statistics on the timeseries with a value
-        calculated for each time segments when this Plotter's
-        ``DataQualityFlag`` was active:
-        
-        - means (means)
-        - mins (mins)
-        - maxs (maxs)
-        - standard deviations (stds)
-        - central times (times)
-        - number of sample values per segment (ns)"""
-        ts = self.read()
-        means = np.array([t.mean().value for t in ts])
-        mins  = np.array([t.min().value for t in ts])
-        maxs  = np.array([t.max().value for t in ts])
-        stds  = np.array([t.std().value for t in ts])
-        times = np.array([t.times.mean().value for t in ts])
-        ns    = np.array([len(t) for t in ts])
-        return self.Stats(ts=ts, means=means, mins=mins, maxs=maxs, stds=stds,
-                          times=times, ns=ns)
-    @property
     def fname(self):
         """Get the filename for this plot."""
-        return '{}.{}'.format(self.query.fname, DEFAULT_PLOT_FILETYPE)
+        return '{}.{}'.format(self.queries[0].fname, DEFAULT_PLOT_FILETYPE)
     def get_plot(self, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``Plotter``. Optionally pass an existing
         figure as an argument to plot to that figure's axes."""
         if fig is None:
             fig = plt.figure()
+        # get the statistics for this one channel (the only one we will plot)
+        s = self.stats[self.queries[0].channel]
         # plot everything
-        f.gca().plot(times, means, marker="o", color="black")
-        f.gca().plot(times, mins, marker="v", color="red")
-        f.gca().plot(times, maxs, marker="^", color="blue")
-        f.gca().plot(times, maxs-stds, marker="1", color="pink")
-        f.gca().plot(times, maxs+stds, marker="2", color="teal")
+        mean = f.gca().errorbar(s.times, s.means, marker="o", color="black",
+                                yerr=s.stds)
+        mins = f.gca().plot(s.times, s.mins, marker="v", color="red")
+        maxs = f.gca().plot(s.times, s.maxs, marker="^", color="blue")
+        # come up with a title
+        start = gwpy.time.from_gps(self.start)
+        end = gwpy.time.from_gps(self.end)
+        if self.run is None:
+            fmt = '{} from {} to {}\nduring {} Segments (trend: {})'
+            title = fmt.format(self.channel_description, start, end,
+                               self.dq_flag, self.trends[0])
+        else:
+            fmt = '{} from {} to {}\nduring {} Segments for {} (trend: {})'
+            title = fmt.format(self.channel_description, start, end,
+                               self.dq_flag, self.run, self.trends[0])
+        f.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
+                                                     "Minima", "Maxima"])
+        f.gca().set_title(title)
+        return f
+
+class CombinedPlotter(Plotter): #TODO
+    """A class for plotting a slow channel with all trends. Used when all trends are available to generate a combined plot for a channel over some period of time."""
+    def __init__(self, start, end, channel, dq_flag,
+                 ext=geco_gwpy_dump.DEFAULT_EXTENSION,
+                 run=None, channel_description=None):
+        if channel_description is None:
+            channel_description = channel
+        self.start = start
+        self.end = end
+        self.channel = channel
+        self.dq_flag = dq_flag
+        self.trends = COMBINED_TRENDS
+        self.ext = ext
+        self.run = run
+        self.channel_description = channel_description
+    def fname(self):
+        """Return the filename for the saved plot image."""
+        ch = self.queries[0].sanitized_channel
+        return '{}__{}__{}.combined.{}'.format(self.start, self.end, ch,
+                                               DEFAULT_PLOT_FILETYPE)
+    def get_plot(self, fig=None):
+        """Generate a ``matplotlib.figure.Figure`` for the channel and
+        dq_flag specified in this ``CombinedPlotter``. Optionally pass an
+        existing figure as an argument to plot to that figure's axes."""
+        if fig is None:
+            fig = plt.figure()
+        # calculate statistics for each channel and dq_flag active segment
+        s = self.stats
+        absmaxs = s['.max,m-trend'].maxs
+        absmins = s['.min,m-trend'].mins
+        means   = s['.mean,m-trend'].means
+        times   = s['.mean,m-trend'].times
+        stds    = s['.mean,m-trend'].stds
+        # plot everything
+        mean = f.gca().errorbar(times, means, marker="o", color="black",
+                                yerr=stds)
+        mins = f.gca().plot(times, absmins, marker="v", color="red")
+        maxs = f.gca().plot(times, absmaxs, marker="^", color="blue")
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
         if self.run is None:
             fmt = '{} from {} to {}\nduring {} Segments'
-            title = fmt.format(self.channel_description, start, end, self.dq_flag)
+            title = fmt.format(self.channel_description, start, end,
+                               self.dq_flag)
         else:
-            fmt = '{} from {} to {}\nduring {} Segments for {}'
-            title = fmt.format(self.channel_description, start, end, self.dq_flag,
-                            self.run)
+            fmt = '{} from {} to {}\nduring {} Segments'
+            title = fmt.format(self.channel_description, start, end,
+                               self.dq_flag, self.run)
+        f.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
+                                                     "Absolute Minima",
+                                                     "Absolute Maxima"])
         f.gca().set_title(title)
         return f
-    def save_plot(self):
-        """Save this plot as an image file."""
-        self.get_plot().savefig(self.fname)
-
-class CombinedPlotter(object): #TODO
 
 #INDEX_MISSING_FMT = ('{} index not found for segment {} of {}, time {}\n'
 #                     'Setting {} index to {}.')
