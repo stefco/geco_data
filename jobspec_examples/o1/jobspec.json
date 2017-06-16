@@ -1,0 +1,77 @@
+{
+  "start": "Sep 12 00:00:00 2015",
+  "end": "Jan 20 00:00:00 2016",
+  "exts": ["hdf5"],
+  "channels": [
+    "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
+    "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3",
+    "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
+    "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
+    "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
+    "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
+    "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
+    "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
+  ],
+  "trends": [
+    ".mean,m-trend",
+    ".rms,m-trend",
+    ".max,m-trend",
+    ".min,m-trend",
+    ".n,m-trend"
+  ],
+  "dq_flags": [
+    "H1:DMT-ANALYSIS_READY:1",
+    "L1:DMT-ANALYSIS_READY:1"
+  ],
+  "max_chunk_length": 86400,
+  "slow_channel_plots": {
+    "height": 10.0,
+    "width": 7.5,
+    "subtract_mean": true,
+    "channel_descriptions": {
+      "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2": "LHO Cs-III Cesium Clock",
+      "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3": "LHO NTP Server",
+      "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, X End Station",
+      "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, Y End Station",
+      "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO CNS II GPS Clock, Y End Station",
+      "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO CNS II GPS Clock, Y End Station",
+      "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1": "LLO Cs-III Cesium Clock",
+      "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2": "LLO NTP Server"
+    },
+    "dq_flag_channel_pairs": [
+      [
+        "H1:DMT-ANALYSIS_READY:1",
+        "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
+      ],
+      [
+        "H1:DMT-ANALYSIS_READY:1",
+        "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3"
+      ],
+      [
+        "H1:DMT-ANALYSIS_READY:1",
+        "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3"
+      ],
+      [
+        "H1:DMT-ANALYSIS_READY:1",
+        "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3"
+      ],
+      [
+        "L1:DMT-ANALYSIS_READY:1",
+        "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
+      ],
+      [
+        "L1:DMT-ANALYSIS_READY:1",
+        "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
+      ],
+      [
+        "L1:DMT-ANALYSIS_READY:1",
+        "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+      ],
+      [
+        "L1:DMT-ANALYSIS_READY:1",
+        "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
+      ]
+    ],
+    "run": "O1"
+  }
+}

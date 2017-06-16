@@ -145,7 +145,7 @@ class Query(object):
     def sanitized_channel(self):
         """get the channel name as used in filenames, i.e. with commas (,) and
         colons (:) replaced in order to fit filename conventions."""
-        return self.channel.replace(':', '..').replace(',', '--')
+        return sanitize_for_filename(self.channel)
     @property
     def fname(self):
         """get a filename for this particular timespan and channel"""
@@ -664,6 +664,7 @@ class Job(object):
         for extraneous_key in extraneous_keys:
             segs.pop(extraneous_key)
         return segs
+
 def _run_queries(job, multiproc=False):
     """Try to download all data, i.e. run all queries. Can use multiple
     processes to try to improve I/O performance, though by default, only
@@ -675,6 +676,15 @@ def _run_queries(job, multiproc=False):
         mapf = map
     mapf(_download_data_if_missing, job.queries)
     logging.info('done downloading data.')
+
+def sanitize_for_filename(string):
+    """Take some string and return a sanitized filename with offensive
+    characters (colons and commas) replaced with innocuous characters.
+    This is not a unique encoding; it is just meant to be minimally offensive
+    to the eye and simple to understand. It is intended for use with EPICS
+    channels and DQ flag names, which only colons and commas as non-standard
+    characters for filenames."""
+    return string.replace(':', '..').replace(',', '--')
 
 if __name__ == '__main__':
     # specify the job specification file to load

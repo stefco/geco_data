@@ -6,6 +6,7 @@ if __name__ == '__main__':
     # necessary for headless plotting
     matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.font_manager
 import numpy as np
 import geco_gwpy_dump
 import gwpy.segments
@@ -19,6 +20,13 @@ DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
 DEFAULT_HEIGHT = 10.0
 DEFAULT_WIDTH = 7.5
+# value that LSC uses to indicate a missing/unrecorded value in EPICS
+MISSING_VALUE_CONSTANT = 0.0
+# should we subtract mean values from plots where this is relevant?
+DEFAULT_SUBTRACT_MEANS = True
+# make matplotlib legend fonts smaller so that they take up less space
+DEFAULT_LEGEND_FONT = matplotlib.font_manager.FontProperties()
+DEFAULT_LEGEND_FONT.set_size('small')
 SEC_PER_DAY = 86400.
 NS_PER_SECOND = 10**9
 COMBINED_TRENDS = [
@@ -29,6 +37,12 @@ COMBINED_TRENDS = [
     ".n,m-trend"
 ]
 
+def get_missing_value_indices(array):
+    """Get indices in some array with a missing value according to DAQ
+    (determined by checking if the value is equal to the default for missing
+    data)"""
+    return np.nonzero(array == MISSING_VALUE_CONSTANT)[0]
+
 class PlottingJob(object):
     """A description of the plots that need to be made along with methods
     for making them. Has a similar interface to ``geco_gwpy_dump.Job``, and
@@ -38,13 +52,15 @@ class PlottingJob(object):
     the plots, while instances of this class provides specific information on
     how to make those plots."""
     def __init__(self, job, run, channel_descriptions, dq_flag_channel_pairs,
-                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
+                 subtract_means=DEFAULT_SUBTRACT_MEANS):
         self.job = job
         self.run = run
         self.channel_descriptions = channel_descriptions
         self.dq_flag_channel_pairs = dq_flag_channel_pairs
         self.height = height
         self.width = width
+        self.subtract_means = subtract_means
     def to_dict(self):
         """Return a dict representation of this object."""
         job_dict = self.job.to_dict()
@@ -54,7 +70,8 @@ class PlottingJob(object):
                      'channel_descriptions': self.channel_descriptions,
                      'dq_flag_channel_pairs': self.dq_flag_channel_pairs,
                      'height': self.height,
-                     'width': self.width}
+                     'width': self.width,
+                     'subtract_means': subtract_means}
         job_dict['slow_channel_plots'] = plot_dict
         return job_dict
     def save(self, jobspecfile):
@@ -65,10 +82,12 @@ class PlottingJob(object):
     def from_dict(cls, d):
         """Instantiate a PlottingJob from a suitable dictionary
         representation."""
-        # set defaults for height and width
+        # set defaults for height, width, and if mean value should be removed
         plot_dict = {'height': DEFAULT_HEIGHT,
-                     'width': DEFAULT_WIDTH}
-        # update with other values and user-specified height and width
+                     'width': DEFAULT_WIDTH,
+                     'subtract_means': DEFAULT_SUBTRACT_MEANS}
+        # update with other values and user-specified height and width and
+        # whether mean values should be subtracted from relevant plots
         plot_dict.update(d['slow_channel_plots'])
         return cls(job = geco_gwpy_dump.Job.from_dict(d),
                    run = plot_dict['run'],
@@ -142,24 +161,6 @@ class PlottingJob(object):
         its own plot."""
         for plotter in self.combined_plotters:
             plotter.save_plot()
-    @property
-    def days(self):
-        """Get the length of this run in days."""
-        return (self.end - self.start) / SEC_PER_DAY
-    @property
-    def time_ticks(self):
-        """Get time ticks for this plot. Should always be between 5 and 10
-        tickmarcks."""
-        logdays = np.log10(self.days)
-        logdaysflr = int(np.floor(logdays))
-        # pick number of days per tick so that we have 5 - 10 ticks
-        if logdays - logdaysflr > 0.65:
-            days_per_tick = int(10**logdaysflr)
-        elif logdays - logdaysflr > 0.3:
-            days_per_tick = int(10**logdaysflr // 2)
-        else:
-            days_per_tick = int(10**logdaysflr // 5)
-        return np.arange(0, self.days, days_per_tick)
 
 class Plotter(object):
     """An abstract class for defining plotting jobs."""
@@ -223,6 +224,32 @@ class Plotter(object):
         for q in self.queries:
             ts[q.channel] = q.read_and_split_into_segments(self.dq_segments)
         return ts
+    @property
+    def days(self):
+        """Get the length of this run in days."""
+        return (self.end - self.start) / SEC_PER_DAY
+    @property
+    def time_ticks(self):
+        """Get time ticks for this plot. Should always be between 5 and 10
+        tickmarcks."""
+        logdays = np.log10(self.days)
+        logdaysflr = int(np.floor(logdays))
+        # pick number of days per tick so that we have 5 - 10 ticks
+        if logdays - logdaysflr > 0.65:
+            days_per_tick = int(10**logdaysflr)
+        elif logdays - logdaysflr > 0.3:
+            days_per_tick = int(10**logdaysflr // 2)
+        else:
+            days_per_tick = int(10**logdaysflr // 5)
+        return [int(t) for t in np.arange(0, self.days, days_per_tick)]
+    @property
+    def sanitized_dq_flag(self):
+        """get the DQ Flag name as used in filenames, i.e. with commas (,) and
+        colons (:) replaced in order to fit filename conventions."""
+        return geco_gwpy_dump.sanitize_for_filename(self.dq_flag)
+    @abc.abstractproperty
+    def title(self):
+        """Get the title for this plot."""
     @abc.abstractproperty
     def fname(self):
         """Return the filename for this plot"""
@@ -269,7 +296,8 @@ class IndividualPlotter(Plotter):
     def __init__(self, start, end, channel, dq_flag, trend=DEFAULT_TREND,
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
-                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
+                 subtract_means=DEFAULT_SUBTRACT_MEANS):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -282,10 +310,26 @@ class IndividualPlotter(Plotter):
         self.channel_description = channel_description
         self.height = height
         self.width = width
+        self.subtract_means = subtract_means
+    @property
+    def title(self):
+        """Get the title for this plot."""
+        start = gwpy.time.from_gps(self.start)
+        end = gwpy.time.from_gps(self.end)
+        # are these the means? mins? maxs? only works for m-trend or s-trend
+        trend_stat = self.trends[0].split('.')[1].split(',')[0]
+        if self.run is None:
+            fmt = '{} from {} to {}\nduring {} Segments (trend: {})'
+            return fmt.format(self.channel_description, start, end,
+                              self.dq_flag, self.trends[0])
+        else:
+            fmt = 'Diagnostic {} ({})\nvs. Timing System during {}'
+            return fmt.format(self.channel_description, trend_stat, self.run)
     @property
     def fname(self):
         """Get the filename for this plot."""
-        return '{}.{}'.format(self.queries[0].fname, DEFAULT_PLOT_FILETYPE)
+        return '{}.{}.{}'.format(self.queries[0].fname, self.sanitized_dq_flag,
+                                 DEFAULT_PLOT_FILETYPE)
     def get_plot(self, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``Plotter``. Optionally pass an existing
@@ -294,32 +338,39 @@ class IndividualPlotter(Plotter):
             fig = plt.figure()
         # get the statistics for this one channel (the only one we will plot)
         s = self.stats[self.queries[0].channel]
+        # should we subtract the mean value of the timeseries from each plot?
+        if self.subtract_means:
+            offset = s.means.mean()
+            y_label = ("Delay vs. Timing Distribution System [ns], Mean Value "
+                       "Removed ({:.2f} ns)").format(offset*NS_PER_SECOND)
+        else:
+            offset = 0
+            y_label = "Delay vs. Timing Distribution System [ns]"
         # label the y-axis
-        fig.gca().set_ylabel("Delay vs. Timing Distribution System [ns]")
+        fig.gca().set_ylabel(y_label)
+        # use number of days since start of run for t-axis
+        t_axis = (s.times - self.start) / SEC_PER_DAY
+        # label the t-axis
+        t0 = gwpy.time.tconvert(self.start).strftime("%c")
+        fig.gca().set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
+        fig.gca().set_xlim(left=0, right=t_axis.max())
+        fig.gca().set_xticks(self.time_ticks)
+        fig.gca().set_xticklabels([str(l) for l in self.time_ticks])
         # plot everything; scale up by 10^9 since plots are in ns, not seconds
-        mean = fig.gca().errorbar(s.times, s.means*NS_PER_SECOND, marker="o",
-                                  color="green", yerr=s.stds*NS_PER_SECOND,
+        mean = fig.gca().errorbar(t_axis, (s.means - offset)*NS_PER_SECOND,
+                                  marker="o", color="green",
+                                  yerr=s.stds*NS_PER_SECOND,
                                   label="Means +/- Std. Dev.")
-        mins = fig.gca().plot(s.times, s.mins*NS_PER_SECOND, marker="v",
-                              color="blue", label="Minima")
-        maxs = fig.gca().plot(s.times, s.maxs*NS_PER_SECOND, marker="^",
-                              color="red", label="Maxima")
+        mins = fig.gca().plot(t_axis, (s.mins - offset)*NS_PER_SECOND,
+                              marker="^", color="blue", label="Minima")
+        maxs = fig.gca().plot(t_axis, (s.maxs - offset)*NS_PER_SECOND,
+                              marker="v", color="red", label="Maxima")
         # set plot size
         fig.set_size_inches((self.width, self.height))
-        # come up with a title
-        start = gwpy.time.from_gps(self.start)
-        end = gwpy.time.from_gps(self.end)
-        if self.run is None:
-            fmt = '{} from {} to {}\nduring {} Segments (trend: {})'
-            title = fmt.format(self.channel_description, start, end,
-                               self.dq_flag, self.trends[0])
-        else:
-            fmt = '{} from {} to {}\nduring {} Segments for {} (trend: {})'
-            title = fmt.format(self.channel_description, start, end,
-                               self.dq_flag, self.run, self.trends[0])
+        fig.gca().set_title(self.title, y=1.05)
         plt.figure(fig.number)
-        plt.legend()
-        fig.gca().set_title(title)
+        plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
+                   loc='upper center', bbox_to_anchor=(0.5, 1.05))
         return fig
 
 class CombinedPlotter(Plotter): #TODO
@@ -327,7 +378,8 @@ class CombinedPlotter(Plotter): #TODO
     def __init__(self, start, end, channel, dq_flag,
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
-                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
+                 subtract_means=DEFAULT_SUBTRACT_MEANS):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -340,12 +392,26 @@ class CombinedPlotter(Plotter): #TODO
         self.channel_description = channel_description
         self.height = height
         self.width = width
+        self.subtract_means = subtract_means
+    @property
+    def title(self):
+        """Get the title for this plot."""
+        start = gwpy.time.from_gps(self.start)
+        end = gwpy.time.from_gps(self.end)
+        if self.run is None:
+            fmt = '{} from {} to {}\nduring {} Segments'
+            return fmt.format(self.channel_description, start, end,
+                              self.dq_flag)
+        else:
+            fmt = 'Diagnostic {}\nvs. Timing System during {}'
+            return fmt.format(self.channel_description, self.run)
     @property
     def fname(self):
         """Return the filename for the saved plot image."""
         ch = self.queries[0].sanitized_channel
-        return '{}__{}__{}.combined.{}'.format(self.start, self.end, ch,
-                                               DEFAULT_PLOT_FILETYPE)
+        return '{}__{}__{}.{}.combined.{}'.format(self.start, self.end, ch,
+                                                  self.sanitized_dq_flag,
+                                                  DEFAULT_PLOT_FILETYPE)
     def get_plot(self, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``CombinedPlotter``. Optionally pass an
@@ -359,32 +425,39 @@ class CombinedPlotter(Plotter): #TODO
         means   = s[self.channel + '.mean,m-trend'].means
         times   = s[self.channel + '.mean,m-trend'].times
         stds    = s[self.channel + '.mean,m-trend'].stds
+        # should we subtract the mean value of the timeseries from each plot?
+        if self.subtract_means:
+            offset = means.mean()
+            y_label = ("Delay vs. Timing Distribution System [ns], Mean Value "
+                       "Removed ({:.2f} ns)").format(offset*NS_PER_SECOND)
+        else:
+            offset = 0
+            y_label = "Delay vs. Timing Distribution System [ns]"
         # label the y-axis
-        fig.gca().set_ylabel("Delay vs. Timing Distribution System [ns]")
+        fig.gca().set_ylabel(y_label)
+        # use number of days since start of run for t-axis
+        t_axis = (times - self.start) / SEC_PER_DAY
+        # label the t-axis
+        t0 = gwpy.time.tconvert(self.start).strftime("%c")
+        fig.gca().set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
+        fig.gca().set_xlim(left=0, right=t_axis.max())
+        fig.gca().set_xticks(self.time_ticks)
+        fig.gca().set_xticklabels([str(l) for l in self.time_ticks])
         # plot everything; scale up by 10^9 since plots are in ns, not seconds
-        mean = fig.gca().errorbar(times, means*NS_PER_SECOND, marker="o",
-                                  color="green", yerr=stds*NS_PER_SECOND,
+        mean = fig.gca().errorbar(t_axis, (means - offset)*NS_PER_SECOND,
+                                  marker="o", color="green",
+                                  yerr=stds*NS_PER_SECOND,
                                   label="Means +/- Std. Dev.")
-        mins = fig.gca().plot(times, absmins*NS_PER_SECOND, marker="v",
-                              color="blue", label="Absolute Minima")
-        maxs = fig.gca().plot(times, absmaxs*NS_PER_SECOND, marker="^",
-                              color="red", label="Absolute Maxima")
+        mins = fig.gca().plot(t_axis, (absmins - offset)*NS_PER_SECOND,
+                              marker="^", color="blue", label="Absolute Minima")
+        maxs = fig.gca().plot(t_axis, (absmaxs - offset)*NS_PER_SECOND,
+                              marker="v", color="red", label="Absolute Maxima")
         # set plot size
         fig.set_size_inches((self.width, self.height))
-        # come up with a title
-        start = gwpy.time.from_gps(self.start)
-        end = gwpy.time.from_gps(self.end)
-        if self.run is None:
-            fmt = '{} from {} to {}\nduring {} Segments'
-            title = fmt.format(self.channel_description, start, end,
-                               self.dq_flag)
-        else:
-            fmt = '{} from {} to {}\nduring {} Segments'
-            title = fmt.format(self.channel_description, start, end,
-                               self.dq_flag, self.run)
+        fig.gca().set_title(self.title, y=1.05)
         plt.figure(fig.number)
-        plt.legend()
-        fig.gca().set_title(title)
+        plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
+                   loc='upper center', bbox_to_anchor=(0.5, 1.05))
         return fig
 
 def main():
