@@ -579,8 +579,8 @@ class Job(object):
     def current_progress(self):
         """Print out current progress of this download."""
         print('{}Checking progress on job{}: {}'.format(_GREEN, _CLEAR,
-                                                        job.to_dict()))
-        queries = job.queries
+                                                        self.to_dict()))
+        queries = self.queries
         n_tot = len(queries)
         print(_RED + 'NOTE that below values only show incremental progress,')
         print('not finished files! If you have the finished files already,')

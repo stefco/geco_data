@@ -17,6 +17,8 @@ import abc
 
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
+DEFAULT_HEIGHT = 10.0
+DEFAULT_WIDTH = 7.5
 SEC_PER_DAY = 86400.
 NS_PER_SECOND = 10**9
 COMBINED_TRENDS = [
@@ -35,11 +37,14 @@ class PlottingJob(object):
     ``geco_gwpy_dump.Job`` specifies what data is necessary to generate
     the plots, while instances of this class provides specific information on
     how to make those plots."""
-    def __init__(self, job, run, channel_descriptions, dq_flag_channel_pairs):
+    def __init__(self, job, run, channel_descriptions, dq_flag_channel_pairs,
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
         self.job = job
         self.run = run
         self.channel_descriptions = channel_descriptions
         self.dq_flag_channel_pairs = dq_flag_channel_pairs
+        self.height = height
+        self.width = width
     def to_dict(self):
         """Return a dict representation of this object."""
         job_dict = self.job.to_dict()
@@ -47,7 +52,9 @@ class PlottingJob(object):
         # with plotting-specific information
         plot_dict = {'run': self.run,
                      'channel_descriptions': self.channel_descriptions,
-                     'dq_flag_channel_pairs': self.dq_flag_channel_pairs}
+                     'dq_flag_channel_pairs': self.dq_flag_channel_pairs,
+                     'height': self.height,
+                     'width': self.width}
         job_dict['slow_channel_plots'] = plot_dict
         return job_dict
     def save(self, jobspecfile):
@@ -58,11 +65,17 @@ class PlottingJob(object):
     def from_dict(cls, d):
         """Instantiate a PlottingJob from a suitable dictionary
         representation."""
-        plot_dict = d['slow_channel_plots']
+        # set defaults for height and width
+        plot_dict = {'height': DEFAULT_HEIGHT,
+                     'width': DEFAULT_WIDTH}
+        # update with other values and user-specified height and width
+        plot_dict.update(d['slow_channel_plots'])
         return cls(job = geco_gwpy_dump.Job.from_dict(d),
                    run = plot_dict['run'],
                    channel_descriptions = plot_dict['channel_descriptions'],
-                   dq_flag_channel_pairs = plot_dict['dq_flag_channel_pairs'])
+                   dq_flag_channel_pairs = plot_dict['dq_flag_channel_pairs'],
+                   height = plot_dict['height'],
+                   width = plot_dict['width'])
     @classmethod
     def load(cls, jobspecfile='jobspec.json'):
         """load this PlottingJob from a job specification file, assumed to be
@@ -255,7 +268,8 @@ class IndividualPlotter(Plotter):
         A human-readable description of this channel. OPTIONAL."""
     def __init__(self, start, end, channel, dq_flag, trend=DEFAULT_TREND,
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
-                 run=None, channel_description=None):
+                 run=None, channel_description=None,
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -266,6 +280,8 @@ class IndividualPlotter(Plotter):
         self.ext = ext
         self.run = run
         self.channel_description = channel_description
+        self.height = height
+        self.width = width
     @property
     def fname(self):
         """Get the filename for this plot."""
@@ -288,6 +304,8 @@ class IndividualPlotter(Plotter):
                               color="blue", label="Minima")
         maxs = fig.gca().plot(s.times, s.maxs*NS_PER_SECOND, marker="^",
                               color="red", label="Maxima")
+        # set plot size
+        fig.set_size_inches((self.width, self.height))
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
@@ -308,7 +326,8 @@ class CombinedPlotter(Plotter): #TODO
     """A class for plotting a slow channel with all trends. Used when all trends are available to generate a combined plot for a channel over some period of time."""
     def __init__(self, start, end, channel, dq_flag,
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
-                 run=None, channel_description=None):
+                 run=None, channel_description=None,
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -319,6 +338,8 @@ class CombinedPlotter(Plotter): #TODO
         self.ext = ext
         self.run = run
         self.channel_description = channel_description
+        self.height = height
+        self.width = width
     @property
     def fname(self):
         """Return the filename for the saved plot image."""
@@ -348,6 +369,8 @@ class CombinedPlotter(Plotter): #TODO
                               color="blue", label="Absolute Minima")
         maxs = fig.gca().plot(times, absmaxs*NS_PER_SECOND, marker="^",
                               color="red", label="Absolute Maxima")
+        # set plot size
+        fig.set_size_inches((self.width, self.height))
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
