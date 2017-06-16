@@ -17,6 +17,8 @@ import abc
 
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
+SEC_PER_DAY = 86400.
+NS_PER_SECOND = 10**9
 COMBINED_TRENDS = [
     ".mean,m-trend",
     ".min,m-trend",
@@ -127,6 +129,24 @@ class PlottingJob(object):
         its own plot."""
         for plotter in self.combined_plotters:
             plotter.save_plot()
+    @property
+    def days(self):
+        """Get the length of this run in days."""
+        return (self.end - self.start) / SEC_PER_DAY
+    @property
+    def time_ticks(self):
+        """Get time ticks for this plot. Should always be between 5 and 10
+        tickmarcks."""
+        logdays = np.log10(self.days)
+        logdaysflr = int(np.floor(logdays))
+        # pick number of days per tick so that we have 5 - 10 ticks
+        if logdays - logdaysflr > 0.65:
+            days_per_tick = int(10**logdaysflr)
+        elif logdays - logdaysflr > 0.3:
+            days_per_tick = int(10**logdaysflr // 2)
+        else:
+            days_per_tick = int(10**logdaysflr // 5)
+        return np.arange(0, self.days, days_per_tick)
 
 class Plotter(object):
     """An abstract class for defining plotting jobs."""
@@ -258,11 +278,16 @@ class IndividualPlotter(Plotter):
             fig = plt.figure()
         # get the statistics for this one channel (the only one we will plot)
         s = self.stats[self.queries[0].channel]
-        # plot everything
-        mean = fig.gca().errorbar(s.times, s.means, marker="o", color="black",
-                                  yerr=s.stds)
-        mins = fig.gca().plot(s.times, s.mins, marker="v", color="red")
-        maxs = fig.gca().plot(s.times, s.maxs, marker="^", color="blue")
+        # label the y-axis
+        fig.gca().set_ylabel("Delay vs. Timing Distribution System [ns]")
+        # plot everything; scale up by 10^9 since plots are in ns, not seconds
+        mean = fig.gca().errorbar(s.times, s.means*NS_PER_SECOND, marker="o",
+                                  color="green", yerr=s.stds*NS_PER_SECOND,
+                                  label="Means +/- Std. Dev.")
+        mins = fig.gca().plot(s.times, s.mins*NS_PER_SECOND, marker="v",
+                              color="blue", label="Minima")
+        maxs = fig.gca().plot(s.times, s.maxs*NS_PER_SECOND, marker="^",
+                              color="red", label="Maxima")
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
@@ -274,8 +299,8 @@ class IndividualPlotter(Plotter):
             fmt = '{} from {} to {}\nduring {} Segments for {} (trend: {})'
             title = fmt.format(self.channel_description, start, end,
                                self.dq_flag, self.run, self.trends[0])
-        fig.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
-                                                       "Minima", "Maxima"])
+        plt.figure(fig.number)
+        plt.legend()
         fig.gca().set_title(title)
         return fig
 
@@ -294,6 +319,7 @@ class CombinedPlotter(Plotter): #TODO
         self.ext = ext
         self.run = run
         self.channel_description = channel_description
+    @property
     def fname(self):
         """Return the filename for the saved plot image."""
         ch = self.queries[0].sanitized_channel
@@ -312,11 +338,16 @@ class CombinedPlotter(Plotter): #TODO
         means   = s[self.channel + '.mean,m-trend'].means
         times   = s[self.channel + '.mean,m-trend'].times
         stds    = s[self.channel + '.mean,m-trend'].stds
-        # plot everything
-        mean = fig.gca().errorbar(times, means, marker="o", color="black",
-                                  yerr=stds)
-        mins = fig.gca().plot(times, absmins, marker="v", color="red")
-        maxs = fig.gca().plot(times, absmaxs, marker="^", color="blue")
+        # label the y-axis
+        fig.gca().set_ylabel("Delay vs. Timing Distribution System [ns]")
+        # plot everything; scale up by 10^9 since plots are in ns, not seconds
+        mean = fig.gca().errorbar(times, means*NS_PER_SECOND, marker="o",
+                                  color="green", yerr=stds*NS_PER_SECOND,
+                                  label="Means +/- Std. Dev.")
+        mins = fig.gca().plot(times, absmins*NS_PER_SECOND, marker="v",
+                              color="blue", label="Absolute Minima")
+        maxs = fig.gca().plot(times, absmaxs*NS_PER_SECOND, marker="^",
+                              color="red", label="Absolute Maxima")
         # come up with a title
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
@@ -328,9 +359,8 @@ class CombinedPlotter(Plotter): #TODO
             fmt = '{} from {} to {}\nduring {} Segments'
             title = fmt.format(self.channel_description, start, end,
                                self.dq_flag, self.run)
-        fig.legend(handles=[mean, mins, maxs], labels=["Means +/- Std. Dev.",
-                                                       "Absolute Minima",
-                                                       "Absolute Maxima"])
+        plt.figure(fig.number)
+        plt.legend()
         fig.gca().set_title(title)
         return fig
 
