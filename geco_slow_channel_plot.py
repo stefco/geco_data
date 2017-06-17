@@ -18,15 +18,17 @@ import abc
 
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
-DEFAULT_HEIGHT = 10.0
-DEFAULT_WIDTH = 7.5
+DEFAULT_PLOT_PROPERTIES = {}
+DEFAULT_HEIGHT = 7.5
+DEFAULT_WIDTH = 10.0
 # value that LSC uses to indicate a missing/unrecorded value in EPICS
-MISSING_VALUE_CONSTANT = 0.0
+UNRECORDED_VALUE_CONSTANT = 0.0
 # should we subtract mean values from plots where this is relevant?
 DEFAULT_SUBTRACT_MEANS = True
 # make matplotlib legend fonts smaller so that they take up less space
 DEFAULT_LEGEND_FONT = matplotlib.font_manager.FontProperties()
 DEFAULT_LEGEND_FONT.set_size('small')
+DEFAULT_AXES_POSITION = [0.125, 0.1, 0.775, 0.73]
 SEC_PER_DAY = 86400.
 NS_PER_SECOND = 10**9
 COMBINED_TRENDS = [
@@ -37,11 +39,19 @@ COMBINED_TRENDS = [
     ".n,m-trend"
 ]
 
-def get_missing_value_indices(array):
-    """Get indices in some array with a missing value according to DAQ
-    (determined by checking if the value is equal to the default for missing
-    data)"""
-    return np.nonzero(array == MISSING_VALUE_CONSTANT)[0]
+def get_unrecorded_value_indices(array):
+    """Get indices in some array with a unrecorded value according to DAQ
+    (determined by checking if the value is equal to the default for unrecorded
+    data). Note that these indices correspond to data which, according to the
+    DAQ, was not taken, e.g. due to the device in question being inactive."""
+    return np.nonzero(array == UNRECORDED_VALUE_CONSTANT)[0]
+
+def get_unlocatable_value_indices(array):
+    """Get indices in some array which could not be located on a server or
+    frame file. Note that these indices correspond to data which may have been
+    taken but which are not included in the locally cached timeseries; plots
+    will have to be remade once missing data has been filled in."""
+    return np.nonzero(array == geco_gwpy_dump.DEFAULT_PAD)[0]
 
 class PlottingJob(object):
     """A description of the plots that need to be made along with methods
@@ -51,13 +61,13 @@ class PlottingJob(object):
     ``geco_gwpy_dump.Job`` specifies what data is necessary to generate
     the plots, while instances of this class provides specific information on
     how to make those plots."""
-    def __init__(self, job, run, channel_descriptions, dq_flag_channel_pairs,
+    def __init__(self, job, run, channel_descriptions, plots,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
                  subtract_means=DEFAULT_SUBTRACT_MEANS):
         self.job = job
         self.run = run
         self.channel_descriptions = channel_descriptions
-        self.dq_flag_channel_pairs = dq_flag_channel_pairs
+        self.plots = plots
         self.height = height
         self.width = width
         self.subtract_means = subtract_means
@@ -68,7 +78,7 @@ class PlottingJob(object):
         # with plotting-specific information
         plot_dict = {'run': self.run,
                      'channel_descriptions': self.channel_descriptions,
-                     'dq_flag_channel_pairs': self.dq_flag_channel_pairs,
+                     'plots': self.plots,
                      'height': self.height,
                      'width': self.width,
                      'subtract_means': subtract_means}
@@ -77,7 +87,7 @@ class PlottingJob(object):
     def save(self, jobspecfile):
         """Save a JSON representation of this object."""
         with open(jobspecfile, 'w') as f:
-            json.dump(self.to_dict(), f)
+            json.dump(self.to_dict(), f, indent=2)
     @classmethod
     def from_dict(cls, d):
         """Instantiate a PlottingJob from a suitable dictionary
@@ -92,7 +102,7 @@ class PlottingJob(object):
         return cls(job = geco_gwpy_dump.Job.from_dict(d),
                    run = plot_dict['run'],
                    channel_descriptions = plot_dict['channel_descriptions'],
-                   dq_flag_channel_pairs = plot_dict['dq_flag_channel_pairs'],
+                   plots = plot_dict['plots'],
                    height = plot_dict['height'],
                    width = plot_dict['width'])
     @classmethod
@@ -123,17 +133,21 @@ class PlottingJob(object):
     def individual_plotters(self):
         """Return a list of ``IndividualPlotter``s for this job."""
         plotters = []
-        for trend in self.trends:
-            for dq_flag_channel_pair in self.dq_flag_channel_pairs:
-                dq_flag = dq_flag_channel_pair[0]
-                channel = dq_flag_channel_pair[1]
+        for plot in self.plots:
+            dq_flag = plot['dq_flag']
+            channel = plot['channel']
+            plot_props = DEFAULT_PLOT_PROPERTIES
+            if plot.has_key('plot_properties'):
+                plot_props.update(plot_properties)
+            for trend in self.trends:
                 desc = self.channel_descriptions[channel]
                 # only need the first extension since any should have saved data
                 p = IndividualPlotter(start = self.start, end = self.end,
                                       channel = channel, dq_flag = dq_flag,
                                       trend = trend, ext = self.exts[0],
                                       run = self.run,
-                                      channel_description = desc)
+                                      channel_description = desc,
+                                      plot_properties = plot_props)
                 plotters.append(p)
         return plotters
     def make_individual_plots(self):
@@ -145,15 +159,19 @@ class PlottingJob(object):
     def combined_plotters(self):
         """Return a list of ``CombinedPlotter``s for this job."""
         plotters = []
-        for dq_flag_channel_pair in self.dq_flag_channel_pairs:
-            dq_flag = dq_flag_channel_pair[0]
-            channel = dq_flag_channel_pair[1]
+        for plot in self.plots:
+            dq_flag = plot['dq_flag']
+            channel = plot['channel']
+            plot_props = DEFAULT_PLOT_PROPERTIES
+            if plot.has_key('plot_properties'):
+                plot_props.update(plot_properties)
             desc = self.channel_descriptions[channel]
             # only need the first extension since any should have saved data
             p = CombinedPlotter(start = self.start, end = self.end,
                                 channel = channel, dq_flag = dq_flag,
                                 ext = self.exts[0], run = self.run,
-                                channel_description = desc)
+                                channel_description = desc,
+                                plot_properties = plot_props)
             plotters.append(p)
         return plotters
     def make_combined_plots(self):
@@ -214,7 +232,9 @@ class Plotter(object):
         return self.job.get_dq_segments()[self.dq_flag]
     def save_plot(self):
         """Save this plot as an image file."""
-        self.get_plot().savefig(self.fname)
+        fig = self.get_plot(save_sidecar=True)
+        fig.savefig(self.fname)
+        plt.close(fig)
     def read(self):
         """Read a dict of lists of timeseries for this channel corresponding to
         the channel/trend combinations loaded time intervals when this
@@ -253,8 +273,12 @@ class Plotter(object):
     @abc.abstractproperty
     def fname(self):
         """Return the filename for this plot"""
+    @property
+    def fname_sidecar(self):
+        """Return the filename for this plot's metadata sidecar file"""
+        return self.fname + '.sidecar.json'
     @abc.abstractmethod
-    def get_plot(self, fig=None):
+    def get_plot(self, save_sidecar=False, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``Plotter``. Optionally pass an existing
         figure as an argument to plot to that figure's axes."""
@@ -297,7 +321,8 @@ class IndividualPlotter(Plotter):
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
-                 subtract_means=DEFAULT_SUBTRACT_MEANS):
+                 subtract_means=DEFAULT_SUBTRACT_MEANS,
+                 plot_properties=DEFAULT_PLOT_PROPERTIES):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -323,63 +348,96 @@ class IndividualPlotter(Plotter):
             return fmt.format(self.channel_description, start, end,
                               self.dq_flag, self.trends[0])
         else:
-            fmt = 'Diagnostic {} ({})\nvs. Timing System during {}'
+            fmt = 'Diagnostic {} ({}) during {}'
             return fmt.format(self.channel_description, trend_stat, self.run)
     @property
     def fname(self):
         """Get the filename for this plot."""
         return '{}.{}.{}'.format(self.queries[0].fname, self.sanitized_dq_flag,
                                  DEFAULT_PLOT_FILETYPE)
-    def get_plot(self, fig=None):
+    def get_plot(self, save_sidecar=False, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``Plotter``. Optionally pass an existing
         figure as an argument to plot to that figure's axes."""
         if fig is None:
             fig = plt.figure()
+        ax = fig.gca()
         # get the statistics for this one channel (the only one we will plot)
         s = self.stats[self.queries[0].channel]
         # should we subtract the mean value of the timeseries from each plot?
         if self.subtract_means:
             offset = s.means.mean()
-            y_label = ("Delay vs. Timing Distribution System [ns], Mean Value "
-                       "Removed ({:.2f} ns)").format(offset*NS_PER_SECOND)
+            fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
+                   "Mean Value Removed ({:.2f} ns)")
+            y_label = fmt.format(self.channel_description,
+                                 offset*NS_PER_SECOND)
         else:
             offset = 0
             y_label = "Delay vs. Timing Distribution System [ns]"
         # label the y-axis
-        fig.gca().set_ylabel(y_label)
+        ax.set_ylabel(y_label)
         # use number of days since start of run for t-axis
         t_axis = (s.times - self.start) / SEC_PER_DAY
         # label the t-axis
         t0 = gwpy.time.tconvert(self.start).strftime("%c")
-        fig.gca().set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
-        fig.gca().set_xlim(left=0, right=t_axis.max())
-        fig.gca().set_xticks(self.time_ticks)
-        fig.gca().set_xticklabels([str(l) for l in self.time_ticks])
+        ax.set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
+        ax.set_xlim(left=0, right=t_axis.max())
+        ax.set_xticks(self.time_ticks)
+        ax.set_xticklabels([str(l) for l in self.time_ticks])
+        # mark and remove unrecorded data
+        unrecorded_indices = dict()
+        t_axis_clean = dict()
+        y_axis_clean = dict()
+        for array_name in ['means', 'mins', 'maxs']:
+            array = s.__getattribute__(array_name)
+            unrecorded = get_unrecorded_value_indices(array)
+            y_axis_clean[array_name] = np.delete(array, unrecorded)
+            t_axis_clean[array_name] = np.delete(t_axis, unrecorded)
+            unrecorded_indices[array_name] = list(unrecorded)
+        # save unrecorded data indices to a sidecar file
+        if save_sidecar:
+            with open(self.fname_sidecar, 'w') as f:
+                json.dump({'unrecorded_indices': unrecorded_indices},
+                          f, indent=2)
         # plot everything; scale up by 10^9 since plots are in ns, not seconds
-        mean = fig.gca().errorbar(t_axis, (s.means - offset)*NS_PER_SECOND,
-                                  marker="o", color="green",
-                                  yerr=s.stds*NS_PER_SECOND,
-                                  label="Means +/- Std. Dev.")
-        mins = fig.gca().plot(t_axis, (s.mins - offset)*NS_PER_SECOND,
-                              marker="^", color="blue", label="Minima")
-        maxs = fig.gca().plot(t_axis, (s.maxs - offset)*NS_PER_SECOND,
-                              marker="v", color="red", label="Maxima")
+        stds_unrecorded_removed = np.delete(s.stds, unrecorded_indices['means'])
+        ax.errorbar(t_axis_clean['means'],
+                    (y_axis_clean['means'] - offset)*NS_PER_SECOND,
+                    marker="o", color="green",
+                    yerr=stds_unrecorded_removed*NS_PER_SECOND,
+                    label="Means +/- Std. Dev.")
+        ax.scatter(t_axis_clean['mins'],
+                   (y_axis_clean['mins'] - offset)*NS_PER_SECOND,
+                   marker="^", color="blue", label="Minima")
+        ax.scatter(t_axis_clean['maxs'],
+                   (y_axis_clean['maxs'] - offset)*NS_PER_SECOND,
+                   marker="v", color="red", label="Maxima")
+        # plot the unrecorded points as well
+        all_unrecorded = list(set.union(*[set(v) for v in
+                                       unrecorded_indices.values()]))
+        unrecorded_times = t_axis[all_unrecorded]
+        ax.scatter(unrecorded_times, unrecorded_times*0, marker="x",
+                   color="orange", label="Data Not Taken",
+                   s=(fig.dpi**2)*(0.16**2), zorder=0)
         # set plot size
         fig.set_size_inches((self.width, self.height))
-        fig.gca().set_title(self.title, y=1.05)
+        ax.set_title(self.title, y=1.07)
+        ax.set_position(DEFAULT_AXES_POSITION)
         plt.figure(fig.number)
         plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
-                   loc='upper center', bbox_to_anchor=(0.5, 1.05))
+                   loc='upper center', bbox_to_anchor=(0.5, 1.07))
         return fig
 
 class CombinedPlotter(Plotter): #TODO
-    """A class for plotting a slow channel with all trends. Used when all trends are available to generate a combined plot for a channel over some period of time."""
+    """A class for plotting a slow channel with all trends. Used when all
+    trends are available to generate a combined plot for a channel over some
+    period of time."""
     def __init__(self, start, end, channel, dq_flag,
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
-                 subtract_means=DEFAULT_SUBTRACT_MEANS):
+                 subtract_means=DEFAULT_SUBTRACT_MEANS,
+                 plot_properties=DEFAULT_PLOT_PROPERTIES):
         if channel_description is None:
             channel_description = channel
         self.start = start
@@ -403,7 +461,7 @@ class CombinedPlotter(Plotter): #TODO
             return fmt.format(self.channel_description, start, end,
                               self.dq_flag)
         else:
-            fmt = 'Diagnostic {}\nvs. Timing System during {}'
+            fmt = 'Diagnostic {} during {}'
             return fmt.format(self.channel_description, self.run)
     @property
     def fname(self):
@@ -412,12 +470,13 @@ class CombinedPlotter(Plotter): #TODO
         return '{}__{}__{}.{}.combined.{}'.format(self.start, self.end, ch,
                                                   self.sanitized_dq_flag,
                                                   DEFAULT_PLOT_FILETYPE)
-    def get_plot(self, fig=None):
+    def get_plot(self, save_sidecar=False, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``CombinedPlotter``. Optionally pass an
         existing figure as an argument to plot to that figure's axes."""
         if fig is None:
             fig = plt.figure()
+        ax = fig.gca()
         # calculate statistics for each channel and dq_flag active segment
         s = self.stats
         absmaxs = s[self.channel + '.max,m-trend'].maxs
@@ -428,36 +487,65 @@ class CombinedPlotter(Plotter): #TODO
         # should we subtract the mean value of the timeseries from each plot?
         if self.subtract_means:
             offset = means.mean()
-            y_label = ("Delay vs. Timing Distribution System [ns], Mean Value "
-                       "Removed ({:.2f} ns)").format(offset*NS_PER_SECOND)
+            fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
+                   "Mean Value Removed ({:.2f} ns)")
+            y_label = fmt.format(self.channel_description,
+                                 offset*NS_PER_SECOND)
         else:
             offset = 0
             y_label = "Delay vs. Timing Distribution System [ns]"
         # label the y-axis
-        fig.gca().set_ylabel(y_label)
+        ax.set_ylabel(y_label)
         # use number of days since start of run for t-axis
         t_axis = (times - self.start) / SEC_PER_DAY
         # label the t-axis
         t0 = gwpy.time.tconvert(self.start).strftime("%c")
-        fig.gca().set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
-        fig.gca().set_xlim(left=0, right=t_axis.max())
-        fig.gca().set_xticks(self.time_ticks)
-        fig.gca().set_xticklabels([str(l) for l in self.time_ticks])
+        ax.set_xlabel("Days Since Start of Run ({} UTC)".format(t0))
+        ax.set_xlim(left=0, right=t_axis.max())
+        ax.set_xticks(self.time_ticks)
+        ax.set_xticklabels([str(l) for l in self.time_ticks])
+        # mark and remove unrecorded data
+        unrecorded_indices = dict()
+        t_axis_clean = dict()
+        y_axis_clean = dict()
+        for array_name in ['means', 'absmins', 'absmaxs']:
+            array = locals()[array_name]
+            unrecorded = get_unrecorded_value_indices(array)
+            y_axis_clean[array_name] = np.delete(array, unrecorded)
+            t_axis_clean[array_name] = np.delete(t_axis, unrecorded)
+            unrecorded_indices[array_name] = list(unrecorded)
+        # save unrecorded data indices to a sidecar file
+        if save_sidecar:
+            with open(self.fname_sidecar, 'w') as f:
+                json.dump({'unrecorded_indices': unrecorded_indices},
+                          f, indent=2)
         # plot everything; scale up by 10^9 since plots are in ns, not seconds
-        mean = fig.gca().errorbar(t_axis, (means - offset)*NS_PER_SECOND,
-                                  marker="o", color="green",
-                                  yerr=stds*NS_PER_SECOND,
-                                  label="Means +/- Std. Dev.")
-        mins = fig.gca().plot(t_axis, (absmins - offset)*NS_PER_SECOND,
-                              marker="^", color="blue", label="Absolute Minima")
-        maxs = fig.gca().plot(t_axis, (absmaxs - offset)*NS_PER_SECOND,
-                              marker="v", color="red", label="Absolute Maxima")
+        stds_unrecorded_removed = np.delete(stds, unrecorded_indices['means'])
+        ax.errorbar(t_axis_clean['means'],
+                    (y_axis_clean['means'] - offset)*NS_PER_SECOND,
+                    marker="o", color="green",
+                    yerr=stds_unrecorded_removed*NS_PER_SECOND,
+                    label="Means +/- Std. Dev.")
+        ax.scatter(t_axis_clean['absmins'],
+                   (y_axis_clean['absmins'] - offset)*NS_PER_SECOND,
+                   marker="^", color="blue", label="Abs. Minima")
+        ax.scatter(t_axis_clean['absmaxs'],
+                   (y_axis_clean['absmaxs'] - offset)*NS_PER_SECOND,
+                   marker="v", color="red", label="Abs. Maxima")
+        # plot the unrecorded points as well
+        all_unrecorded = list(set.union(*[set(v) for v in
+                                       unrecorded_indices.values()]))
+        unrecorded_times = t_axis[all_unrecorded]
+        ax.scatter(unrecorded_times, unrecorded_times*0, marker="x",
+                   color="orange", label="Data Not Taken",
+                   s=(fig.dpi**2)*(0.16**2), zorder=0)
         # set plot size
         fig.set_size_inches((self.width, self.height))
-        fig.gca().set_title(self.title, y=1.05)
+        ax.set_title(self.title, y=1.07)
+        ax.set_position(DEFAULT_AXES_POSITION)
         plt.figure(fig.number)
         plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
-                   loc='upper center', bbox_to_anchor=(0.5, 1.05))
+                   loc='upper center', bbox_to_anchor=(0.5, 1.07))
         return fig
 
 def main():
@@ -465,8 +553,8 @@ def main():
         plt_job = PlottingJob.load()
     else:
         plt_job = PlottingJob.load(sys.argv[1])
-    pj.pj.make_combined_plots()
-    pj.pj.make_individual_plots()
+    plt_job.make_combined_plots()
+    plt_job.make_individual_plots()
 
 if __name__ == "__main__":
     main()
