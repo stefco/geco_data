@@ -717,4 +717,8 @@ if __name__ == '__main__':
     logging.debug('all spans: {}'.format(job.subspans))
     logging.debug('all queries: {}'.format(job.queries))
     _run_queries(job, multiproc=True)
+    logging.debug('finished downloading data. concatenating files...')
     job.concatenate_files()
+    logging.debug('finished concatenating files. filling in missing values...')
+    job.fill_in_missing_m_trend()
+    logging.debug('finished files. DONE.')
