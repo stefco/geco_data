@@ -7,6 +7,7 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.font_manager
+import matplotlib.patches
 import numpy as np
 import geco_gwpy_dump
 import gwpy.segments
@@ -18,7 +19,26 @@ import abc
 
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
-DEFAULT_PLOT_PROPERTIES = {}
+DEFAULT_PLOT_PROPERTIES = {
+    "subtract_means": True,
+    "detector_offline": [],
+    "find_unrecorded": True,
+    "fname_desc": None
+}
+PLOT_PROPERTY_DESCRIPTIONS = {
+    "subtract_means": ("If true, subtract means from plots. If a number, "
+                       "subtract that number from the plots."),
+    "detector_offline": "List of GPS start/stop tuples when detector was off",
+    "find_unrecorded": "Should times when data was not taken be found/plotted?",
+    "fname_desc": ("A description of this particular plot, to be appended to "
+                   "the plot filename. Useful for cases when multiple "
+                   "plots with different options are to be made for the same "
+                   "time span, channel, and DQ flag."),
+    "ylim_top": "Upper y-limit for the axes of plots for this channel",
+    "ylim_bottom": "Lower y-limit for the axes of plots for this channel",
+    "xlim_left": "Leftward x-limit for the axes of plots for this channel",
+    "xlim_right": "Rightward x-limit for the axes of plots for this channel"
+}
 DEFAULT_HEIGHT = 7.5
 DEFAULT_WIDTH = 10.0
 # value that LSC uses to indicate a missing/unrecorded value in EPICS
@@ -62,15 +82,13 @@ class PlottingJob(object):
     the plots, while instances of this class provides specific information on
     how to make those plots."""
     def __init__(self, job, run, channel_descriptions, plots,
-                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
-                 subtract_means=DEFAULT_SUBTRACT_MEANS):
+                 height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH):
         self.job = job
         self.run = run
         self.channel_descriptions = channel_descriptions
         self.plots = plots
         self.height = height
         self.width = width
-        self.subtract_means = subtract_means
     def to_dict(self):
         """Return a dict representation of this object."""
         job_dict = self.job.to_dict()
@@ -80,8 +98,7 @@ class PlottingJob(object):
                      'channel_descriptions': self.channel_descriptions,
                      'plots': self.plots,
                      'height': self.height,
-                     'width': self.width,
-                     'subtract_means': subtract_means}
+                     'width': self.width}
         job_dict['slow_channel_plots'] = plot_dict
         return job_dict
     def save(self, jobspecfile):
@@ -93,9 +110,7 @@ class PlottingJob(object):
         """Instantiate a PlottingJob from a suitable dictionary
         representation."""
         # set defaults for height, width, and if mean value should be removed
-        plot_dict = {'height': DEFAULT_HEIGHT,
-                     'width': DEFAULT_WIDTH,
-                     'subtract_means': DEFAULT_SUBTRACT_MEANS}
+        plot_dict = {'height': DEFAULT_HEIGHT, 'width': DEFAULT_WIDTH}
         # update with other values and user-specified height and width and
         # whether mean values should be subtracted from relevant plots
         plot_dict.update(d['slow_channel_plots'])
@@ -136,9 +151,9 @@ class PlottingJob(object):
         for plot in self.plots:
             dq_flag = plot['dq_flag']
             channel = plot['channel']
-            plot_props = DEFAULT_PLOT_PROPERTIES
+            plot_props = DEFAULT_PLOT_PROPERTIES.copy()
             if plot.has_key('plot_properties'):
-                plot_props.update(plot_properties)
+                plot_props.update(plot['plot_properties'])
             for trend in self.trends:
                 desc = self.channel_descriptions[channel]
                 # only need the first extension since any should have saved data
@@ -162,9 +177,9 @@ class PlottingJob(object):
         for plot in self.plots:
             dq_flag = plot['dq_flag']
             channel = plot['channel']
-            plot_props = DEFAULT_PLOT_PROPERTIES
+            plot_props = DEFAULT_PLOT_PROPERTIES.copy()
             if plot.has_key('plot_properties'):
-                plot_props.update(plot_properties)
+                plot_props.update(plot['plot_properties'])
             desc = self.channel_descriptions[channel]
             # only need the first extension since any should have saved data
             p = CombinedPlotter(start = self.start, end = self.end,
@@ -272,7 +287,9 @@ class Plotter(object):
         """Get the title for this plot."""
     @abc.abstractproperty
     def fname(self):
-        """Return the filename for this plot"""
+        """Get the filename for this plot. If a filename description is
+        provided as the fname_desc key in the plot_properties for this plot in
+        the jobspec file, this description should be appended to the title."""
     @property
     def fname_sidecar(self):
         """Return the filename for this plot's metadata sidecar file"""
@@ -321,7 +338,6 @@ class IndividualPlotter(Plotter):
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
-                 subtract_means=DEFAULT_SUBTRACT_MEANS,
                  plot_properties=DEFAULT_PLOT_PROPERTIES):
         if channel_description is None:
             channel_description = channel
@@ -335,7 +351,7 @@ class IndividualPlotter(Plotter):
         self.channel_description = channel_description
         self.height = height
         self.width = width
-        self.subtract_means = subtract_means
+        self.plot_properties = plot_properties
     @property
     def title(self):
         """Get the title for this plot."""
@@ -352,9 +368,15 @@ class IndividualPlotter(Plotter):
             return fmt.format(self.channel_description, trend_stat, self.run)
     @property
     def fname(self):
-        """Get the filename for this plot."""
-        return '{}.{}.{}'.format(self.queries[0].fname, self.sanitized_dq_flag,
-                                 DEFAULT_PLOT_FILETYPE)
+        """Get the filename for this plot. If a filename description is
+        provided as the fname_desc key in the plot_properties for this plot in
+        the jobspec file, this description should be appended to the title."""
+        if self.plot_properties['fname_desc'] is None:
+            desc = ""
+        else:
+            desc = "." + self.plot_properties['fname_desc']
+        return '{}.{}{}.{}'.format(self.queries[0].fname, self.sanitized_dq_flag,
+                                   desc, DEFAULT_PLOT_FILETYPE)
     def get_plot(self, save_sidecar=False, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``Plotter``. Optionally pass an existing
@@ -365,15 +387,23 @@ class IndividualPlotter(Plotter):
         # get the statistics for this one channel (the only one we will plot)
         s = self.stats[self.queries[0].channel]
         # should we subtract the mean value of the timeseries from each plot?
-        if self.subtract_means:
+        # if subtract means is defined as a number, then we will subtract that
+        # value out instead of the mean.
+        if self.plot_properties['subtract_means'] is True:
             offset = s.means.mean()
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
                    "Mean Value Removed ({:.2f} ns)")
             y_label = fmt.format(self.channel_description,
                                  offset*NS_PER_SECOND)
-        else:
+        elif self.plot_properties['subtract_means'] is False:
             offset = 0
             y_label = "Delay vs. Timing Distribution System [ns]"
+        else:
+            offset = self.plot_properties['subtract_means']
+            fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
+                   "Offset Removed ({:.2f} ns)")
+            y_label = fmt.format(self.channel_description,
+                                 offset*NS_PER_SECOND)
         # label the y-axis
         ax.set_ylabel(y_label)
         # use number of days since start of run for t-axis
@@ -412,13 +442,30 @@ class IndividualPlotter(Plotter):
         ax.scatter(t_axis_clean['maxs'],
                    (y_axis_clean['maxs'] - offset)*NS_PER_SECOND,
                    marker="v", color="red", label="Maxima")
+        # find what the default ylimits are, since they will be broken by
+        # adding in unrecorded and missing points.
+        ylim = list(ax.get_ylim())
         # plot the unrecorded points as well
         all_unrecorded = list(set.union(*[set(v) for v in
-                                       unrecorded_indices.values()]))
+                                          unrecorded_indices.values()]))
         unrecorded_times = t_axis[all_unrecorded]
-        ax.scatter(unrecorded_times, unrecorded_times*0, marker="x",
-                   color="orange", label="Data Not Taken",
-                   s=(fig.dpi**2)*(0.16**2), zorder=0)
+        # set x and y limits based on any provided plot_properties; reset the
+        if len(unrecorded_times) != 0:
+            ax.errorbar(unrecorded_times, unrecorded_times*0, marker="x",
+                        color="orange", label="Data Not Taken",
+                        zorder=0, linestyle='none',
+                        yerr=2*max([abs(l) for l in ylim]))
+        # ylimits even if not explicitly provided so that they are not broken
+        # by the large errorbars on the missing values.
+        if self.plot_properties.has_key('ylim_bottom'):
+            ylim[0] = self.plot_properties['ylim_bottom']
+        if self.plot_properties.has_key('ylim_top'):
+            ylim[1] = self.plot_properties['ylim_top']
+        ax.set_ylim(ylim[0], ylim[1])
+        if self.plot_properties.has_key('xlim_left'):
+            ax.set_xlim(left=self.plot_properties['xlim_left'])
+        if self.plot_properties.has_key('xlim_right'):
+            ax.set_xlim(right=self.plot_properties['xlim_right'])
         # set plot size
         fig.set_size_inches((self.width, self.height))
         ax.set_title(self.title, y=1.07)
@@ -436,7 +483,6 @@ class CombinedPlotter(Plotter): #TODO
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
-                 subtract_means=DEFAULT_SUBTRACT_MEANS,
                  plot_properties=DEFAULT_PLOT_PROPERTIES):
         if channel_description is None:
             channel_description = channel
@@ -450,7 +496,7 @@ class CombinedPlotter(Plotter): #TODO
         self.channel_description = channel_description
         self.height = height
         self.width = width
-        self.subtract_means = subtract_means
+        self.plot_properties = plot_properties
     @property
     def title(self):
         """Get the title for this plot."""
@@ -465,11 +511,18 @@ class CombinedPlotter(Plotter): #TODO
             return fmt.format(self.channel_description, self.run)
     @property
     def fname(self):
-        """Return the filename for the saved plot image."""
+        """Get the filename for this plot. If a filename description is
+        provided as the fname_desc key in the plot_properties for this plot in
+        the jobspec file, this description should be appended to the title."""
         ch = self.queries[0].sanitized_channel
-        return '{}__{}__{}.{}.combined.{}'.format(self.start, self.end, ch,
-                                                  self.sanitized_dq_flag,
-                                                  DEFAULT_PLOT_FILETYPE)
+        if self.plot_properties['fname_desc'] is None:
+            desc = ""
+        else:
+            desc = "." + self.plot_properties['fname_desc']
+        return '{}__{}__{}.{}.combined{}.{}'.format(self.start, self.end, ch,
+                                                    self.sanitized_dq_flag,
+                                                    desc,
+                                                    DEFAULT_PLOT_FILETYPE)
     def get_plot(self, save_sidecar=False, fig=None):
         """Generate a ``matplotlib.figure.Figure`` for the channel and
         dq_flag specified in this ``CombinedPlotter``. Optionally pass an
@@ -485,15 +538,23 @@ class CombinedPlotter(Plotter): #TODO
         times   = s[self.channel + '.mean,m-trend'].times
         stds    = s[self.channel + '.mean,m-trend'].stds
         # should we subtract the mean value of the timeseries from each plot?
-        if self.subtract_means:
+        # if subtract means is defined as a number, then we will subtract that
+        # value out instead of the mean.
+        if self.plot_properties['subtract_means'] is True:
             offset = means.mean()
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
                    "Mean Value Removed ({:.2f} ns)")
             y_label = fmt.format(self.channel_description,
                                  offset*NS_PER_SECOND)
-        else:
+        elif self.plot_properties['subtract_means'] is False:
             offset = 0
             y_label = "Delay vs. Timing Distribution System [ns]"
+        else:
+            offset = self.plot_properties['subtract_means']
+            fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
+                   "Offset Removed ({:.2f} ns)")
+            y_label = fmt.format(self.channel_description,
+                                 offset*NS_PER_SECOND)
         # label the y-axis
         ax.set_ylabel(y_label)
         # use number of days since start of run for t-axis
@@ -532,19 +593,39 @@ class CombinedPlotter(Plotter): #TODO
         ax.scatter(t_axis_clean['absmaxs'],
                    (y_axis_clean['absmaxs'] - offset)*NS_PER_SECOND,
                    marker="v", color="red", label="Abs. Maxima")
-        # plot the unrecorded points as well
+        # find what the default ylimits are, since they will be broken by
+        # adding in unrecorded and missing points.
+        ylim = list(ax.get_ylim())
+        # plot the unrecorded points as well, if necessary
+        if self.plot_properties['find_unrecorded']:
+            pass
         all_unrecorded = list(set.union(*[set(v) for v in
-                                       unrecorded_indices.values()]))
+                                          unrecorded_indices.values()]))
         unrecorded_times = t_axis[all_unrecorded]
-        ax.scatter(unrecorded_times, unrecorded_times*0, marker="x",
-                   color="orange", label="Data Not Taken",
-                   s=(fig.dpi**2)*(0.16**2), zorder=0)
+        if len(unrecorded_times) != 0:
+            ax.errorbar(unrecorded_times, unrecorded_times*0, marker="x",
+                        color="orange", label="Data Not Taken",
+                        zorder=0, linestyle='none',
+                        yerr=4*max([abs(l) for l in ylim]))
+        # set x and y limits based on any provided plot_properties; reset the
+        # ylimits even if not explicitly provided so that they are not broken
+        # by the large errorbars on the missing values.
+        if self.plot_properties.has_key('ylim_bottom'):
+            ylim[0] = self.plot_properties['ylim_bottom']
+        if self.plot_properties.has_key('ylim_top'):
+            ylim[1] = self.plot_properties['ylim_top']
+        ax.set_ylim(ylim[0], ylim[1])
+        if self.plot_properties.has_key('xlim_left'):
+            ax.set_xlim(left=self.plot_properties['xlim_left'])
+        if self.plot_properties.has_key('xlim_right'):
+            ax.set_xlim(right=self.plot_properties['xlim_right'])
         # set plot size
         fig.set_size_inches((self.width, self.height))
         ax.set_title(self.title, y=1.07)
         ax.set_position(DEFAULT_AXES_POSITION)
-        plt.figure(fig.number)
-        plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
+        #plt.figure(fig.number)
+        #plt.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
+        ax.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
                    loc='upper center', bbox_to_anchor=(0.5, 1.07))
         return fig
 
