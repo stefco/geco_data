@@ -397,7 +397,8 @@ class IndividualPlotter(Plotter):
                                  offset*NS_PER_SECOND)
         elif self.plot_properties['subtract_means'] is False:
             offset = 0
-            y_label = "Delay vs. Timing Distribution System [ns]"
+            fmt = "Difference between {} and Distribution\nSystem Time [ns]"
+            y_label = fmt.format(self.channel_description)
         else:
             offset = self.plot_properties['subtract_means']
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
@@ -548,7 +549,8 @@ class CombinedPlotter(Plotter): #TODO
                                  offset*NS_PER_SECOND)
         elif self.plot_properties['subtract_means'] is False:
             offset = 0
-            y_label = "Delay vs. Timing Distribution System [ns]"
+            fmt = "Difference between {} and Distribution\nSystem Time [ns]"
+            y_label = fmt.format(self.channel_description)
         else:
             offset = self.plot_properties['subtract_means']
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
