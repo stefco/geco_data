@@ -134,6 +134,9 @@ def try_making_overlay_plots(gpstime, eventdir):
     return True
 
 def make_pdf_files(graceid, gpstime, eventdir):
+    """Try to make the final output PDF file, i.e. the Timing Witness
+    Document that will be uploaded to DCC."""
+    print('Trying to make Timing Witness Document PDF...')
     command = [os.path.join(geco_data_dir, 'timing_witness_paper.py'),
                graceid, gpstime, eventdir]
     proc = subprocess.Popen(command, stdout=subprocess.PIPE,
@@ -170,7 +173,7 @@ def main(gpstime, graceid):
         except NDS2AvailabilityException:
             time.sleep(SLEEP_TIME)
     # try making the LATEX and PDF files
-    make_pdf_files(graceid, gpstime, eventdir)
+    make_pdf_files(graceid, str(gpstime), eventdir)
 
 if __name__ == '__main__':
     main(args.gpstime, args.graceid)

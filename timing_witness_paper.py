@@ -98,3 +98,9 @@ proc = subprocess.Popen(command)
 res, err = proc.communicate()
 if proc.returncode != 0:
     raise Exception('Something went wrong while generating the PDF file.')
+
+# make a copy of the file with the appropriate filename for DCC upload; will
+# overwrite the old file.
+dcc_name = 'aLIGO_BBH_Candidate_TimingWitness_{}.pdf'.format(graceid)
+shutil.copy(os.path.join(outdir, 'main.pdf'),
+            os.path.join(outdir, dcc_name))
