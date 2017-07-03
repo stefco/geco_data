@@ -141,6 +141,12 @@ def main(gpstime, graceid):
         os.makedirs(eventdir)
     os.chdir(eventdir)
     print('made eventdir and changed to it: {}'.format(eventdir))
+    # make little convenince files containing the GPS time and GraceID
+    for varname in ['graceid', 'gpstime']:
+        fname = varname + '.txt'
+        if not os.path.isfile(fname):
+            with open(fname, 'w') as f:
+                f.write(str(locals()[varname]))
     # try generating files
     done = False
     while not done:

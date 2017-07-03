@@ -2,16 +2,20 @@
 # (c) Stefan Countryman, 2017
 # Write a timing witness paper template
 
-import sys, os, glob, gwpy.time, shutil
+import sys
+import os
+import glob
+import gwpy.time
+import shutil
+import subprocess
 
-SCRIPTDIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPTDIR = os.path.dirname(os.path.realpath(__file__))
 TEMPLATEDIRNAME = 'timing_checks.d'
 TEMPLATEPATH = os.path.join(SCRIPTDIR, TEMPLATEDIRNAME, 'main.tex')
-OUTFILE = os.path.join(outdir, "main.tex")
 AUXDIR = os.path.join(SCRIPTDIR, TEMPLATEDIRNAME, 'auxiliary_files')
 USAGE = """USAGE:
 
-  $0 GRACEID GPSTIME OUTDIR
+  """ + sys.argv[0] + """ GRACEID GPSTIME OUTDIR
 
   Outputs a timing witness TEX file into the specified output
   directory. The output directory must have the required plots,
@@ -21,12 +25,16 @@ USAGE = """USAGE:
 
 if (len(sys.argv) == 0) or ("-h" in sys.argv):
     print(USAGE)
-    exit(1)
+    if len(sys.argv) == 0:
+        exit(1)
+    else:
+        exit(0)
 else:
-    graceid = sys.argv[0]
-    gpstime = sys.argv[1]
-    outdir  = os.path.abspath(sys.argv[2])
-    utctime = gwpy.time.tconvert(gpstime).strftime("%c UTC")
+    graceid = sys.argv[1]
+    gpstime = sys.argv[2]
+    outdir  = os.path.abspath(sys.argv[3])
+    utctime = gwpy.time.tconvert(int(gpstime)).strftime("%c UTC")
+    outfilepath = os.path.join(outdir, "main.tex")
 
 # define some straightforward text substitutions for the template TEX file
 SUBSTITUTIONS = {
@@ -65,29 +73,27 @@ GLOB_SUBSTITUTIONS = {
 
 # copy auxiliary files to the output directory
 for filename in os.listdir(AUXDIR):
-    filepath = os.path.join(AUXDIR, filename)
-    if not os.path.isfile(filepath):
-        shutil.copy(filepath, outdir)
+    if not os.path.isfile(os.path.join(outdir, filename)):
+        shutil.copy(os.path.join(AUXDIR, filename), outdir)
 
 # put ourselves in the output directory
 os.chdir(outdir)
 
-# read paper template and substitute out placeholder variables in memory
+# read paper template and substitute out placeholder variables, then write
+# everything to the final output file
 with open(TEMPLATEPATH) as infile:
-    paper = infile.read()
-for string in SUBSTITUTIONS.keys():
-    paper.replace(string, SUBSTITUTIONS[string])
-for string in GLOB_SUBSTITUTIONS.keys():
-    # this will fail if a needed file is missing
-    path = glob.glob(GLOB_SUBSTITUTIONS[string])[0]
-    paper.replace(string, path)
-
-# write the paper template to the output directory
-with open(OUTFILE, 'w') as outfile:
-    outfile.write(paper)
+    with open(outfilepath, 'w') as outfile:
+        for line in infile:
+            for string in SUBSTITUTIONS.keys():
+                line = line.replace(string, SUBSTITUTIONS[string])
+            for string in GLOB_SUBSTITUTIONS.keys():
+                # this will fail if a needed file is missing
+                path = glob.glob(GLOB_SUBSTITUTIONS[string])[0]
+                line = line.replace(string, path)
+            outfile.write(line)
 
 # compile the PDF
-command = ['pdflatex', OUTFILE]
+command = ['pdflatex', outfilepath]
 proc = subprocess.Popen(command)
 res, err = proc.communicate()
 if proc.returncode != 0:
