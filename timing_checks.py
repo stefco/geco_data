@@ -133,6 +133,19 @@ def try_making_overlay_plots(gpstime, eventdir):
     print('Done with Overlay Plots.')
     return True
 
+def make_pdf_files(graceid, gpstime, eventdir):
+    command = [os.path.join(geco_data_dir, 'timing_witness_paper.py'),
+               graceid, gpstime, eventdir]
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    res, err = proc.communicate()
+    if proc.returncode != 0:
+        raise Exception('Something went wrong generating the final PDF file.')
+        print('STDOUT: {}'.format(res))
+        print('STDERR: {}'.format(err))
+    print('Done with Timing Witness Document PDF.')
+    return True
+
 def main(gpstime, graceid):
     """Generate missing files."""
     eventdir = os.path.expanduser('~/public_html/events/{}'.format(graceid))
@@ -141,7 +154,7 @@ def main(gpstime, graceid):
         os.makedirs(eventdir)
     os.chdir(eventdir)
     print('made eventdir and changed to it: {}'.format(eventdir))
-    # make little convenince files containing the GPS time and GraceID
+    # make little convenience files containing the GPS time and GraceID
     for varname in ['graceid', 'gpstime']:
         fname = varname + '.txt'
         if not os.path.isfile(fname):
@@ -156,6 +169,8 @@ def main(gpstime, graceid):
                      try_making_overlay_plots(gpstime, eventdir) )
         except NDS2AvailabilityException:
             time.sleep(SLEEP_TIME)
+    # try making the LATEX and PDF files
+    make_pdf_files(graceid, gpstime, eventdir)
 
 if __name__ == '__main__':
     main(args.gpstime, args.graceid)

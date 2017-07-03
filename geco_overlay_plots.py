@@ -13,6 +13,7 @@ indistinguishible from a plot of a single second worth of data, provided the
 assumption of (quasi) periodicity holds in the actual signal. This provides a
 quick visual check of the quality of the signal."""
 FAST_BITRATE = 16384      # bitrate for fast channels, like ADC DuoTone & IRIG-B
+NS_PER_SEC = 1e6
 DEFAULT_DELTA_T = (30*60) # 30 minutes
 OVERLAY_DPI = 400         # overlay plots need higher resolution to show detail
 # OVERLAY_PLOT_WIDTH = 24
@@ -156,10 +157,10 @@ class DuoToneSecondStats(SecondStats):
         plt.close(1)
         plt.figure(1)
         plt.plot(t, self.stats['mean'], 'k')
-        plt.errorbar(t, self.stats['mean'], yerr=[min_delta, max_delta],
-                     fmt='k')
-        plt.errorbar(t, self.stats['mean'], yerr=self.stats['sigma'],
-                     fmt='go', linewidth=4)
+        plt.errorbar(t*NS_PER_SEC, self.stats['mean'],
+                     yerr=[min_delta, max_delta], fmt='k')
+        plt.errorbar(t*NS_PER_SEC, self.stats['mean'],
+                     yerr=self.stats['sigma'], fmt='go', linewidth=4)
         plt.title(title)
         plt.xlabel(xlabel)
         plt.grid(b=True, which='major', color='#262626', linestyle='--')
