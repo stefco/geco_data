@@ -1,0 +1,291 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    INSTITUTE OF PHYSICS PUBLISHING                                   %
+%                                                                      %
+%   `Preparing an article for publication in an Institute of Physics   %
+%    Publishing journal using LaTeX'                                   %
+%                                                                      %
+%    LaTeX source code `ioplau2e.tex' used to generate `author         %
+%    guidelines', the documentation explaining and demonstrating use   %
+%    of the Institute of Physics Publishing LaTeX preprint files       %
+%    `iopart.cls, iopart12.clo and iopart10.clo'.                      %
+%                                                                      %
+%    `ioplau2e.tex' itself uses LaTeX with `iopart.cls'                %
+%                                                                      %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+% First we have a character check
+%
+% ! exclamation mark    " double quote  
+% # hash                ` opening quote (grave)
+% & ampersand           ' closing quote (acute)
+% $ dollar              % percent       
+% ( open parenthesis    ) close paren.  
+% - hyphen              = equals sign
+% | vertical bar        ~ tilde         
+% @ at sign             _ underscore
+% { open curly brace    } close curly   
+% [ open square         ] close square bracket
+% + plus sign           ; semi-colon    
+% * asterisk            : colon
+% < open angle bracket  > close angle   
+% , comma               . full stop
+% ? question mark       / forward slash 
+% \ backslash           ^ circumflex
+%
+% ABCDEFGHIJKLMNOPQRSTUVWXYZ 
+% abcdefghijklmnopqrstuvwxyz 
+% 1234567890
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+\documentclass[12pt]{iopart}
+\newcommand{\gguide}{{\it Preparing graphics for IOP journals}}
+\newcommand{\graceId}{$GRACEID}
+\newcommand{\gpsTime}{$GPSTIME}
+\newcommand{\utcTime}{$UTCTIME}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{float} % allows figures to go in the middle of sections
+%Uncomment next line if AMS fonts required
+%\usepackage{iopams}  
+\begin{document}
+
+\title[Timing Witness Paper for LVC \graceId]{Timing Witness Signals Indicate Trusty Timing 
+for LVC \graceId, a Burst Event Candidate}
+
+\author{Stefan Countryman, Zsuzsa Marka}
+\address{Columbia University,
+Columbia Astrophysics Laboratory,
+Pupin Hall - MS 5247,
+New York, NY 10027\newline
+\href{http://markalab.org}{markalab.org}}
+\ead{stefan.countryman@ligo.org}
+
+\begin{abstract}
+Advanced LIGO data is taken by a DAQ that is directly driven in hardware by the Advanced LIGO Timing Distribution System that ensures end-to-end hardware-based timing signal integrity between the received GPS signal and the ADC boards. The Advanced LIGO Timing Diagnostic System is a separate additional hardware that provides additional layers of timing information and crosschecks to enable us to have versatile diagnostic information.
+
+As an extra precaution, we examined the timing witness signals to ensure that the aLIGO datastream’s timing was perfect around Event Candidate \graceId, observed at \gpsTime= \utcTime. We found that the DuoTone witness indicated excellent timing performance on the sub-microsecond level and the IRIG-B signals indicated precise second decoding.
+
+\end{abstract}
+
+%Uncomment for PACS numbers title message
+%\pacs{00.00, 20.00, 42.10}
+% Keywords required only for MST, PB, PMB, PM, JOA, JOB? 
+%\vspace{2pc}
+%\noindent{\it Keywords}: Article preparation, IOP journals
+% Uncomment for Submitted to journal title message
+%\submitto{\JPA}
+% Comment out if separate title page not required
+\maketitle
+
+\section{Introduction}
+The advanced LIGO timing system is implemented in hardware. Each and every board in the chain was tested multiple times in different environments, including end-to-end test using long fibers - it performs for tens of ns and the GPS is rated for few hundred ns. This is the primary performance measure of the well-working timing system that is below 1$\mu s$.
+
+Additionally, independent hardware generated GPS synchronized timing witness channels are recorded along with the aLIGO datastream: the DuoTone and the IRIG-B datastreams at each end-stations. The phase of the DuoTone signals allows sub-microsecond accuracy determination of the datastream’s shift from the perfect agreement with the GPS time. Since the DuoTone signal is repeated in every second, it is prudent to also look at the IRIG-B signal that has a phase allowing time verification on the ms level and a full timecode allowing the determination of absolute YEAR:MONTH:DAY-HOUR:MINUTE:SECOND. Therefore the DuoTone and IRIG-B signals together cover all possible timeshifts, and the most feared small shifts redundantly. 
+In this document we provide visual proof that the phase of the witness signals did not move from the nominal value even for a second during the hour surrounding the \graceId\ event.    
+
+\section{DuoTone Signal Measurements}
+
+Each aLIGO ADC chassis contain a timing Slave board with a DuoTone daughterboard installed. The Slave-DuoTone assembly pairs provide the precise pulses that allow the ADC to record the aLIGO data at $65536Hz$ rate; the phase of this low phase noise ADC clock is synchronized to the GPS 1PPS rising edge. Besides this mission critical functionality, each DuoTone board provide a so called DuoTone diagnostic signal($Y$):
+
+$$Y_1 = A sin(2\pi \times 960 (t+\Delta T))$$
+$$Y_2 = A sin(2\pi \times 961 (t+\Delta T))$$
+$$Y = Y_1 + Y_2 + \Delta A$$
+
+$960Hz$ is chosen as it is a harmonic of $60Hz$, to further preserve GW signal frequency space. The identical individual amplitude A is nominally 2.5V centered around $A=0V$ and $\Delta T$ describes the position of the GPS 1PPS rising edge compared to the $0 \deg$ common phase of the generated DuoTone, which we call the ‘coincident zero crossing’ (the time where the phase of both sinusoidal components becomes zero). The coincident zero crossing clearly and unambiguously repeats once in every second. The sinusoids produced by the slave-duotone timing stack (see e.g. \href{https://dcc.ligo.org/LIGO-E0900019}{LIGO-E0900019}) are thus hardware synchronized to the GPS time in every second with a well-characterized delay of $\Delta T$ for the zero crossing (see \href{https://dcc.ligo.org/LIGO-T1500513}{LIGO-T1500513}) ), and therefore even order of $\gtrsim 1\mu s$ deviations in timing performance would result in alteration of duotone signal shape and change in zero crossing time.
+
+We checked for deviations in duotone signal shape by stacking� 1 second long consecutive segments of duotone signals (i.e. plotting each 1 second long segments on top of each other). The data covered the half-hour long time interval centered on the event candidate time for all four digitized DuoTone signals. On figures 1-4, each consecutive second of the measured DuoTone signal was plotted and stacked on top of each other for a 30 minutes long data window. The x axis represents one second duration of DuoTone segments. Since the DuoTone repeats its waveform every second, ideally all DuoTone curves on the plot are identical to each other, and they should look like a single curve on the plot even though the plot has $30 \times 60 = 1800$ curves plotted on top of each other. If there are seconds where the timing of the DuoTone signals are shifted from the nominal value, or where the signal suffered some sort of degradation, noise, or glitching, the stacked signal’s curve would no longer resemble a single waveform, and the deviation from normal would be clearly visible to the human eye. In the next 4 figures, (figures 1-4) we show the stacked curves for the X-end-stations of the LLO and LHO aLIGO observatories. There are no visible deviations from the normal; as intended, the signal is periodic to a high degree of accuracy, giving the stacked plots the appearance of a single second of DuoTone signal.
+
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LHO_X_DT}
+\centering
+\caption{Overlay plot for the Hanford X-End Station DuoTone signal for 30 minutes surrounding the \graceId\ event.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LHO_Y_DT}
+\centering
+\caption{Overlay plot for the Hanford Y-End Station DuoTone signal for 30 minutes surrounding the \graceId\ event.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LLO_X_DT}
+\centering
+\caption{Overlay plot for the Livingston X-End Station DuoTone signal for 30 minutes surrounding the \graceId\ event.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LLO_Y_DT}
+\centering
+\caption{Overlay plot for the Livingston Y-End Station DuoTone signal for 30 minutes surrounding the \graceId\ event.}
+\centering
+\end{figure}
+
+\section{DuoTone Signal Phase}
+
+Beyond \textit{stacking} 1 second long segments of duotone signals on top of each other (see section 2), we also averaged the one second long waveforms and plotted the averaged DuoTone signal to verify the agreement and errors to higher accuracy.
+
+The following 12 pages (figures 5-16) show the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge, zoomed-in at different magnifications in the x-axis. When the DuoTone signals are symmetric around the 0V level, the zero crossing should be delayed compared to the second tic of the datastream by $\sim 63 \mu s$ ($6.7 \mu s$ of this is due to an inherent delay on the timing Slave-DuoTone stack (see \href{https://dcc.ligo.org/LIGO-T1500513}{LIGO-T1500513}), and the rest is due to $65536Hz$ to $16384Hz$ decimation filter (see appendix to \href{https://dcc.ligo.org/LIGO-T1500516}{LIGO-T1500516}).
+
+On the figures the open circles reflect the average signal, the green error bars indicate the standard deviation, and the ends of the fine black error bars show the maximum/minimum for each data point. The line through the data points guide the eye to help visualize the zero crossing, which is most visible at the medium timescale plotted, and is at a bit above $63 \mu s$. The plots indicate precise agreement with the expected place of the zero crossing and confirm the independent verification measurement by LHO and LLO rapid response team discussed in Section 6 of this document.
+
+The purpose of this study was not the measurement of the already known DuoTone delay, but to verify the stable microsecond-level performance of the timing system at around the time of the candidate event. The DuoTone witness signals indeed indicate \textit{very small errors}: The highest magnification of a representative data point (the last plot of three for each detector) shows in green the standard deviation of measurements for the point closest to the zero crossing for the hour surrounding the \graceId\ event candidate and the error bars indicate the observed maximum and minimum. 
+
+% HANFORD EX ZERO-CROSSING
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HX_DT_FULL}
+\centering
+\caption{Zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EX for the hour surrounding the \graceId\ event candidate. The line through the data points guide the eye to help visualize the zero crossing. Please note that the green error bars are included but are sufficiently small that they are covered by the circular symbols at the data points.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HX_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HX_DT_SUPER_ZOOM}
+\centering
+\caption{Near the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EX for the hour surrounding the \graceId\ event candidate. This is the data point nearest to the zero crossing, with axes selected to show error bars (which are not visible at standard magnification). The size of the green error bar shows very small amplitude variance near the zero crossing.}
+\centering
+\end{figure}
+
+% HANFORD EY ZERO-CROSSING
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HY_DT_FULL}
+\centering
+\caption{Zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EY for the hour surrounding the \graceId\ event candidate. The line through the data points guide the eye to help visualize the zero crossing. Please note that the green error bars are included but are sufficiently small that they are covered by the circular symbols at the data points.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HY_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HY_DT_SUPER_ZOOM}
+\centering
+\caption{Near the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EY for the hour surrounding the \graceId\ event candidate. This is the data point nearest to the zero crossing, with axes selected to show error bars (which are not visible at standard magnification). The size of the green error bar shows very small amplitude variance near the zero crossing.}
+\centering
+\end{figure}
+
+% LIVINGSTON EX ZERO-CROSSING
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LX_DT_FULL}
+\centering
+\caption{Zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EX for the hour surrounding the \graceId\ event candidate. The line through the data points guide the eye to help visualize the zero crossing. Please note that the green error bars are included but are sufficiently small that they are covered by the circular symbols at the data points.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LX_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LX_DT_SUPER_ZOOM}
+\centering
+\caption{Near the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EX for the hour surrounding the \graceId\ event candidate. This is the data point nearest to the zero crossing, with axes selected to show error bars (which are not visible at standard magnification). The size of the green error bar shows very small amplitude variance near the zero crossing.}
+\centering
+\end{figure}
+
+% LIVINGSTON EY ZERO-CROSSING
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LY_DT_FULL}
+\centering
+\caption{Zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EY for the hour surrounding the \graceId\ event candidate. The line through the data points guide the eye to help visualize the zero crossing. Please note that the green error bars are included but are sufficiently small that they are covered by the circular symbols at the data points.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LY_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LY_DT_SUPER_ZOOM}
+\centering
+\caption{Near the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EY for the hour surrounding the \graceId\ event candidate. This is the data point nearest to the zero crossing, with axes selected to show error bars (which are not visible at standard magnification). The size of the green error bar shows very small amplitude variance near the zero crossing.}
+\centering
+\end{figure}
+
+\clearpage
+
+\section{IRIG-B Signal Decoding}
+
+The IRIG-B signal from independent GPS clocks was digitized and recorded at each site in order to provide an independent cross-check for the aLIGO Timing System’s absolute timestamp. These signals were decoded (as specified in Timing IRIG-B Signal Decoding Test, \href{https://dcc.ligo.org/LIGO-T1500391}{LIGO-T1500391}) and plotted for the time of the candidate event \graceId, observed at \gpsTime= \utcTime. The time code was found to be in agreement with the timestamp of the datastream (note that Hanford’s IRIG-B signals are in GPS time; the 18 second difference with UTC is due to leap seconds). Figures 17 through 20 below show the externally generated IRIG-B signals at Hanford and Livingston along with their decoded times. They are consistent with the aLIGO Timing System’s timestamp as used by the aLIGO framewriting computers.
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$HX_IRIGB_FULL}
+\centering
+\caption{The decoded time contained in the Hanford X-End IRIG-B signal at the time of \graceId. Note the 18 second time difference due to Hanford's use of GPS rather than UTC time.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$HY_IRIGB_FULL}
+\centering
+\caption{The decoded time contained in the Hanford Y-End IRIG-B signal at the time of \graceId. Note the 18 second time difference due to Hanford's use of GPS rather than UTC time.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LX_IRIGB_FULL}
+\centering
+\caption{The decoded time contained in the Livingston X-End IRIG-B signal at the time of \graceId.}
+\centering
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[height=0.9\textheight]{$LY_IRIGB_FULL}
+\centering
+\caption{The decoded time contained in the Livingston Y-End IRIG-B signal at the time of \graceId.}
+\centering
+\end{figure}
+
+\section{Conclusion}
+
+All the sanity checks shown in this document indicate that the timing performance of the aLIGO detectors around the candidate event \graceId, observed at \gpsTime= \utcTime\ is according to specifications.
+
+%\subsection{Inclusion of graphics files\label{figinc}}
+%Using the \verb"graphicx" package graphics files can 
+%be included within figure and center environments at an 
+%appropriate point within the text using code such as:
+%\small\begin{verbatim}
+%\includegraphics{file.eps}
+%\end{verbatim}\normalsize
+%The \verb"graphicx" package supports various optional arguments
+%to control the appearance of the figure. Other similar 
+%packages can also be used (e.g. \verb"graphics", \verb"epsf"). 
+%For more detail about graphics inclusion see the documentation 
+%of the \verb"graphicx" package, refer to one of the books on \LaTeX\ {\cite{book1}}
+%or download some of the excellent free documentation available via the Comprehensive
+%TeX Archive Network (CTAN) http://www.ctan.org---{in particular see \cite{eps}}.
+%IOP's graphics guidelines, \gguide, provide further information on preparing EPS files---a copy
+%should have accompanied this document but it may be download from authors.iop.org.
+
+%\section*{References}
+%\begin{thebibliography}{10}
+%\bibitem{book1} Goosens M, Rahtz S and Mittelbach F 1997 {\it The \LaTeX\ Graphics Companion\/} 
+%(Reading, MA: Addison-Wesley)
+%\bibitem{eps} Reckdahl K 1997 {\it Using Imported Graphics in \LaTeX\ } (search CTAN for the file `epslatex.pdf')
+%\end{thebibliography}
+
+\end{document}
+
