@@ -442,9 +442,9 @@ class Plotter(Cacheable):
         ax.set_title(self.title, y=DEFAULT_TITLE_OFFSET)
         ax.set_ylabel(self.y_label)
         ax.set_xlabel(self.t_label)
-        ax.set_xlim(self.t_lim)
         ax.set_xticks(self.time_ticks)
         ax.set_xticklabels([str(l) for l in self.time_ticks])
+        ax.set_xlim(self.t_lim)
         ax.set_position(DEFAULT_AXES_POSITION)
         # add a legend
         ax.legend(prop=DEFAULT_LEGEND_FONT, ncol=4,
@@ -497,10 +497,6 @@ class Plotter(Cacheable):
                                  self.trend*NS_PER_SECOND)
         return y_label
     @property
-    def days(self):
-        """Get the length of this run in days."""
-        return (self.end - self.start) / SEC_PER_DAY
-    @property
     def t_axis(self):
         """Return the default t-axis, which is scaled to be in days from the
         start of the observation run. ``Matplotlib`` refers to this as the
@@ -511,11 +507,11 @@ class Plotter(Cacheable):
         """Return a tuple containing the left and right t-limits for this
         plot."""
         if self.plot_properties.has_key('xlim_left'):
-            left = plot_properties['xlim_left']
+            left = self.plot_properties['xlim_left']
         else:
             left = 0
         if self.plot_properties.has_key('xlim_right'):
-            right = plot_properties['xlim_right']
+            right = self.plot_properties['xlim_right']
         else:
             right = self.t_axis.max()
         return (left, right)
@@ -530,7 +526,8 @@ class Plotter(Cacheable):
     def time_ticks(self):
         """Get time ticks for this plot. Should always be between 5 and 10
         tickmarcks."""
-        logdays = np.log10(self.days)
+        start_day, end_day = self.t_lim
+        logdays = np.log10(end_day - start_day)
         logdaysflr = int(np.floor(logdays))
         # pick number of days per tick so that we have 5 - 10 ticks
         if logdays - logdaysflr > 0.65:
@@ -539,7 +536,8 @@ class Plotter(Cacheable):
             days_per_tick = int(10**logdaysflr // 2)
         else:
             days_per_tick = int(10**logdaysflr // 5)
-        return [int(t) for t in np.arange(0, self.days, days_per_tick)]
+        return [int(t) for t in np.arange(np.ceil(start_day), end_day,
+                                          days_per_tick)]
     @property
     def sanitized_dq_flag(self):
         """get the DQ Flag name as used in filenames, i.e. with commas (,) and
