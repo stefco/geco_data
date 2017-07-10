@@ -82,6 +82,7 @@
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
+          "subtract_means": -2.1434206936327283e-07,
           "ylim_bottom": -500,
           "ylim_top": 500
         }
