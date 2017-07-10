@@ -94,8 +94,10 @@ PLOT_PROPERTY_DESCRIPTIONS = {
 DEFAULT_HEIGHT = 7.5
 DEFAULT_WIDTH = 10.0
 NUM_THREADS = 6
-# value that LSC uses to indicate a missing/unrecorded value in EPICS
+# value that LSC uses to indicate a unrecorded value in EPICS
 UNRECORDED_VALUE_CONSTANT = 0.0
+# value that we have GWPY use to indicate a missing value in NDS2
+MISSING_VALUE_CONSTANT = -1.0
 # should we subtract mean values from plots where this is relevant?
 DEFAULT_SUBTRACT_MEANS = True
 # make matplotlib legend fonts smaller so that they take up less space
@@ -149,7 +151,7 @@ def get_missing_indices(array):
     pad value for unrecorded data). Note that these indices correspond to data
     which, according to NDS2, cannot be found saved anywhere, though it may
     have been saved somewhere."""
-    return np.nonzero(array == UNRECORDED_VALUE_CONSTANT)[0]
+    return np.nonzero(array == MISSING_VALUE_CONSTANT)[0]
 
 def multiprocessing_traceback(func):
     """A decorator for formatting exception traceback into a string to aid in
