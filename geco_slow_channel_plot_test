@@ -1,0 +1,17 @@
+#!/bin/bash
+# (c) Stefan Countryman 2017
+# run some plotting tests on ldas-pcdev2.ligo.caltech.edu
+
+pushd ~/slow-channel-scratch/o1_slow_channels;
+python -c "
+import sys, os, matplotlib;
+matplotlib.use('Agg');
+sys.path.append(os.path.expanduser('~/dev/geco_data'));
+import geco_slow_channel_plot as gp;
+pj = gp.PlottingJob.load();
+cp = pj.combined_plotters[0];
+cp.save_plot();
+print cp.fname;
+ip = pj.individual_plotters[2];
+ip.save_plot();
+print ip.fname;" | tracecolor.sh | xargs imgcat; popd;
