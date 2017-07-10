@@ -1,6 +1,6 @@
 {
   "start": "Mon Oct 31 16:00:00 2016",
-  "end": "Thu Jun 15 00:00:00 2017",
+  "end": "Wed Jun 28 00:00:00 2017",
   "exts": ["hdf5"],
   "channels": [
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
@@ -27,14 +27,13 @@
   "slow_channel_plots": {
     "height": 10.0,
     "width": 7.5,
-    "subtract_mean": true,
     "channel_descriptions": {
       "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2": "LHO Cs-III Cesium Clock",
       "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3": "LHO NTP Server",
-      "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO X End Station GPS Clock",
-      "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO Y End Station GPS Clock",
-      "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO X End Station GPS Clock",
-      "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO Y End Station GPS Clock",
+      "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, X End Station",
+      "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, Y End Station",
+      "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO CNS II GPS Clock, X End Station",
+      "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2": "LLO CNS II GPS Clock, Y End Station",
       "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1": "LLO Cs-III Cesium Clock",
       "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2": "LLO NTP Server"
     },
@@ -44,10 +43,20 @@
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
       },
       {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "ylim_top": 150,
+          "ylim_bottom": -100
+        },
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3"
       },
       {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "ylim_top": 90,
+          "ylim_bottom": -90
+        },
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3"
       },
@@ -60,6 +69,26 @@
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
       },
       {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "subtract_means": 150,
+          "ylim_top": 75,
+          "ylim_bottom": -75
+        },
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
+      },
+      {
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
+      },
+      {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "subtract_means": false,
+          "ylim_top": 500,
+          "ylim_bottom": -500
+        },
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
       },
@@ -68,6 +97,26 @@
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
       },
       {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "subtract_means": false,
+          "ylim_top": 500,
+          "ylim_bottom": -500
+        },
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+      },
+      {
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
+      },
+      {
+        "plot_properties": {
+          "fname_desc": "zoomed",
+          "subtract_means": false,
+          "ylim_top": 500,
+          "ylim_bottom": -500
+        },
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
       }
