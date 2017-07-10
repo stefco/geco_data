@@ -41,50 +41,66 @@
       {
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
-        "ylim_bottom": -100,
-        "ylim_top": 100
+        "plot_properties": {
+          "ylim_bottom": -100,
+          "ylim_top": 100
+        }
       },
       {
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3",
-        "ylim_bottom": -80,
-        "ylim_top": 80
+        "plot_properties": {
+          "ylim_bottom": -80,
+          "ylim_top": 80
+        }
       },
       {
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
-        "ylim_bottom": -80,
-        "ylim_top": 120
+        "plot_properties": {
+          "ylim_bottom": -80,
+          "ylim_top": 120
+        }
       },
       {
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
-        "ylim_bottom": -120,
-        "ylim_top": 120
+        "plot_properties": {
+          "ylim_bottom": -120,
+          "ylim_top": 120
+        }
       },
       {
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
-        "ylim_bottom": -120,
-        "ylim_top": 120
+        "plot_properties": {
+          "ylim_bottom": -120,
+          "ylim_top": 120
+        }
       },
       {
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
-        "ylim_bottom": -500,
-        "ylim_top": 500
+        "plot_properties": {
+          "ylim_bottom": -500,
+          "ylim_top": 500
+        }
       },
       {
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
-        "ylim_bottom": -500,
-        "ylim_top": 500
+        "plot_properties": {
+          "ylim_bottom": -500,
+          "ylim_top": 500
+        }
       },
       {
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
-        "ylim_bottom": -80,
-        "ylim_top": 100
+        "plot_properties": {
+          "ylim_bottom": -80,
+          "ylim_top": 100
+        }
       }
     ],
     "run": "O1"
