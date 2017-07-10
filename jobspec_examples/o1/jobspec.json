@@ -84,6 +84,7 @@
         "plot_properties": {
           "subtract_means": -2.1434206936327283e-07,
           "handle_unrecorded_values": "hide",
+          "xlim_left": 45.50555556,
           "ylim_bottom": -80,
           "ylim_top": 80
         }
