@@ -59,14 +59,14 @@
         "channel": "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
         "plot_properties": {
           "ylim_bottom": -80,
-          "ylim_top": 120
+          "ylim_top": 110
         }
       },
       {
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
         "plot_properties": {
-          "ylim_bottom": -120,
+          "ylim_bottom": -100,
           "ylim_top": 120
         }
       },
@@ -75,7 +75,7 @@
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
           "ylim_bottom": -120,
-          "ylim_top": 120
+          "ylim_top": 100
         }
       },
       {
@@ -101,8 +101,8 @@
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
-          "ylim_bottom": -80,
-          "ylim_top": 100
+          "ylim_bottom": -90,
+          "ylim_top": 90
         }
       }
     ],
