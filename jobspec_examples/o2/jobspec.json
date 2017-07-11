@@ -65,9 +65,10 @@
       },
       {
         "plot_properties": {
-          "subtract_means": 150,
-          "ylim_top": 75,
-          "ylim_bottom": -75
+          "#subtract_means": 150,
+          "handle_missing_values": "hide",
+          "#ylim_top": 75,
+          "#ylim_bottom": -75
         },
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
@@ -75,6 +76,7 @@
       {
         "plot_properties": {
           "subtract_means": false,
+          "handle_missing_values": "hide",
           "ylim_top": 500,
           "ylim_bottom": -500
         },
@@ -84,8 +86,9 @@
       {
         "plot_properties": {
           "subtract_means": false,
-          "ylim_top": 500,
-          "ylim_bottom": -500
+          "handle_missing_values": "hide",
+          "#ylim_top": 500,
+          "#ylim_bottom": -500
         },
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
@@ -93,6 +96,7 @@
       {
         "plot_properties": {
           "subtract_means": false,
+          "handle_missing_values": "hide",
           "ylim_top": 500,
           "ylim_bottom": -500
         },
