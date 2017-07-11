@@ -329,7 +329,7 @@ class Plotter(Cacheable):
         plot_vars = self.plot_vars
         # get the bad indices of each type
         for array_name in self.PlotVars._fields:
-            array = plot_vars.__getattribute__(array_name)
+            array = getattr(plot_vars, array_name)
             bad['unrecorded'][array_name] = list(get_unrecorded_indices(array))
             bad['missing'][array_name] = list(get_missing_indices(array))
             bad['omitted'][array_name] = self.plot_properties['omitted_indices']
@@ -358,8 +358,8 @@ class Plotter(Cacheable):
             all_bad_inds = set()
             for badness_type in self.BadIndices._fields:
                 handle_method_key = 'handle_{}_values'.format(badness_type)
-                ind_type = self.bad_index_types.__getattribute__(badness_type)
-                bad_inds = ind_type.__getattribute__(array_name)
+                ind_type = getattr(self.bad_index_types, badness_type)
+                bad_inds = getattr(ind_type, array_name)
                 if self.plot_properties[handle_method_key] == "hide":
                     shared_bad_set = shared_bad_set.union(bad_inds)
                 elif self.plot_properties[handle_method_key] == "mark":
@@ -464,7 +464,7 @@ class Plotter(Cacheable):
             color_key = '{}_color'.format(badness_type)
             label_key = '{}_label'.format(badness_type)
             if self.plot_properties[handle_method_key] == "mark":
-                bad_inds = self.bad_index_types.__getattribute__(badness_type)
+                bad_inds = getattr(self.bad_index_types, badness_type)
                 # get all bad indices (mins, maxs, etc.) for this badness type
                 all_bad_inds = list(set.union(*[set(b) for b in bad_inds]))
                 if len(all_bad_inds) != 0:
@@ -683,6 +683,7 @@ class IndividualPlotter(Plotter):
                     (  np.delete(self.plot_vars.means, self.bad_indices.means)
                      - self.trend  ) * NS_PER_SECOND,
                     marker="o", color="green",
+                    linestyle='none',
                     yerr=np.delete(self.plot_vars.stds,
                                    self.bad_indices.means) * NS_PER_SECOND,
                     label="Means +/- Std. Dev.")
@@ -765,6 +766,7 @@ class CombinedPlotter(Plotter):
                     (  np.delete(self.plot_vars.means, self.bad_indices.means)
                      - self.trend  ) * NS_PER_SECOND,
                     marker="o", color="green",
+                    linestyle='none',
                     yerr=np.delete(self.plot_vars.stds,
                                    self.bad_indices.means) * NS_PER_SECOND,
                     label="Means +/- Std. Dev.")
