@@ -42,7 +42,8 @@
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
-          "ylim_bottom": -100,
+          "detrend": "linear",
+          "ylim_bottom": -80,
           "ylim_top": 100
         }
       },
