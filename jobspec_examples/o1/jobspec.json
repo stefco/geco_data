@@ -75,6 +75,7 @@
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
+          "handle_unrecorded_values": "ignore",
           "ylim_bottom": -120,
           "ylim_top": 100
         }
@@ -95,6 +96,7 @@
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
         "plot_properties": {
           "detrend": "linear",
+          "handle_unrecorded_values": "ignore",
           "ylim_bottom": -110,
           "ylim_top": 110
         }
@@ -103,6 +105,7 @@
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
         "plot_properties": {
+          "handle_unrecorded_values": "ignore",
           "ylim_bottom": -90,
           "ylim_top": 90
         }
