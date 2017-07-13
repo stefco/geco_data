@@ -10,6 +10,7 @@ import matplotlib.font_manager
 import matplotlib.patches
 import multiprocessing
 import numpy as np
+import scipy.stats
 import geco_gwpy_dump
 import gwpy.segments
 import gwpy.time
@@ -32,7 +33,7 @@ DEFAULT_PLOT_PROPERTIES = {
     "handle_omitted_values": "hide",
     "handle_missing_values": "mark",
     "handle_unrecorded_values": "mark",
-    "subtract_means": True,
+    "detrend": 'mean',
     "detector_offline": [],
     "find_unrecorded": True,
     "fname_desc": None
@@ -78,8 +79,10 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                                  "their placeholder value intact (useful if "
                                  "that placeholder value is suspected to be "
                                  "the true value at that point)."),
-    "subtract_means": ("If true, subtract means from plots. If a number, "
-                       "subtract that number from the plots."),
+    "detrend": ("If equals 'mean', subtract means from plots. If equals "
+                "'none', do not shift the plots. If equals 'linear', remove "
+                "the linear trend from the plots. If a number, "
+                "subtract that number from the plots."),
     "detector_offline": "List of GPS start/stop tuples when detector was off",
     "find_unrecorded": "Should times when data was not taken be found/plotted?",
     "fname_desc": ("A description of this particular plot, to be appended to "
@@ -476,20 +479,28 @@ class Plotter(Cacheable):
                     ax.errorbar(self.t_axis[all_bad_inds],
                                 len(all_bad_inds)*[0], marker="x",
                                 color=color, label=label,
-                                zorder=0, linestyle='none',
+                                zorder=100, linestyle='none',
                                 yerr=4*max([abs(l) for l in ylim]))
                     ax.set_ylim(ylim)
     @property
     def y_label(self):
         """Get a label for the y-axis based on trend type."""
-        if self.plot_properties['subtract_means'] is True:
+        if self.plot_properties['detrend'] == 'mean':
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
                    "Mean Value Removed ({:.2f} ns)")
             y_label = fmt.format(self.channel_description,
                                  self.trend*NS_PER_SECOND)
-        elif self.plot_properties['subtract_means'] is False:
+        elif self.plot_properties['detrend'] == 'none':
             fmt = "Difference between {} and Distribution\nSystem Time [ns]"
             y_label = fmt.format(self.channel_description)
+        elif self.plot_properties['detrend'] == 'linear':
+            fmt = ("Difference between {} and Distribution System Time [ns]\n"
+                   "Linear Trend Removed ({:.2f} ns intercept, "
+                   "{:.2E} drift coefficient)")
+            bestfit, driftcoeff, linregress = self.linregress
+            y_label = fmt.format(self.channel_description,
+                                 linregress.intercept*NS_PER_SECOND,
+                                 driftcoeff)
         else:
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
                    "Offset Removed ({:.2f} ns)")
@@ -543,17 +554,35 @@ class Plotter(Cacheable):
         """get the DQ Flag name as used in filenames, i.e. with commas (,) and
         colons (:) replaced in order to fit filename conventions."""
         return geco_gwpy_dump.sanitize_for_filename(self.dq_flag)
+    LinRegress = collections.namedtuple('LinRegress',
+                                        ['bestfit', 'driftcoeff', 'linregress'])
+    @property
+    @Cacheable._cacheable
+    def linregress(self):
+        """Get the linear regression of the mean values in this plot. Returns
+        a tuple containing the best-fit line y-values for this plotter's
+        t_axis, the drift coefficient, and the ``linregress`` named tuple from
+        scipy.stats.linregress."""
+        r = scipy.stats.linregress(self.t_axis, self.plot_vars.means)
+        bestfit = r.slope * self.t_axis + r.intercept
+        # at time of writing, y-axis is in seconds, t-axis in days, so
+        # the linear regression slope is in seconds per day.
+        driftcoeff = r.slope / SEC_PER_DAY
+        return self.LinRegress(bestfit=bestfit, driftcoeff=driftcoeff,
+                               linregress=r)
     @property
     def trend(self):
         """Should we subtract the mean value of the timeseries from each plot?
         if subtract means is defined as a number, then we will subtract that
         value out instead of the mean."""
-        if self.plot_properties['subtract_means'] is True:
+        if self.plot_properties['detrend'] == 'mean':
             trend = self.plot_vars.means.mean()
-        elif self.plot_properties['subtract_means'] is False:
+        elif self.plot_properties['detrend'] == 'none':
             trend = 0
+        elif self.plot_properties['detrend'] == 'linear':
+            trend, driftcoeff, linregress = self.linregress
         else:
-            trend = self.plot_properties['subtract_means']
+            trend = self.plot_properties['detrend']
         return trend
     @abc.abstractproperty
     def title(self):
@@ -680,20 +709,20 @@ class IndividualPlotter(Plotter):
         """Scale up by 10^9 since plots are in ns, not seconds.
         Remove any indices considered bad in ``plot_properties``"""
         ax.errorbar(np.delete(self.t_axis, self.bad_indices.means),
-                    (  np.delete(self.plot_vars.means, self.bad_indices.means)
-                     - self.trend  ) * NS_PER_SECOND,
+                    np.delete(self.plot_vars.means - self.trend,
+                              self.bad_indices.means) * NS_PER_SECOND,
                     marker="o", color="green",
                     linestyle='none',
                     yerr=np.delete(self.plot_vars.stds,
                                    self.bad_indices.means) * NS_PER_SECOND,
                     label="Means +/- Std. Dev.")
         ax.scatter(np.delete(self.t_axis, self.bad_indices.mins),
-                   (  np.delete(self.plot_vars.mins, self.bad_indices.mins)
-                    - self.trend) * NS_PER_SECOND,
+                   np.delete(self.plot_vars.mins - self.trend,
+                             self.bad_indices.mins) * NS_PER_SECOND,
                    marker="^", color="blue", label="Minima")
         ax.scatter(np.delete(self.t_axis, self.bad_indices.maxs),
-                   (  np.delete(self.plot_vars.maxs, self.bad_indices.maxs)
-                    - self.trend) * NS_PER_SECOND,
+                   np.delete(self.plot_vars.maxs - self.trend,
+                             self.bad_indices.maxs) * NS_PER_SECOND,
                    marker="v", color="red", label="Maxima")
 
 class CombinedPlotter(Plotter):
@@ -763,22 +792,20 @@ class CombinedPlotter(Plotter):
         """Scale up by 10^9 since plots are in ns, not seconds.
         Remove any indices considered bad in ``plot_properties``"""
         ax.errorbar(np.delete(self.t_axis, self.bad_indices.means),
-                    (  np.delete(self.plot_vars.means, self.bad_indices.means)
-                     - self.trend  ) * NS_PER_SECOND,
+                    np.delete(self.plot_vars.means - self.trend,
+                              self.bad_indices.means) * NS_PER_SECOND,
                     marker="o", color="green",
                     linestyle='none',
                     yerr=np.delete(self.plot_vars.stds,
                                    self.bad_indices.means) * NS_PER_SECOND,
                     label="Means +/- Std. Dev.")
         ax.scatter(np.delete(self.t_axis, self.bad_indices.absmins),
-                   (  np.delete(self.plot_vars.absmins,
-                                self.bad_indices.absmins)
-                    - self.trend  ) * NS_PER_SECOND,
+                   np.delete(self.plot_vars.absmins - self.trend,
+                             self.bad_indices.absmins) * NS_PER_SECOND,
                    marker="^", color="blue", label="Abs. Minima")
         ax.scatter(np.delete(self.t_axis, self.bad_indices.absmaxs),
-                   (  np.delete(self.plot_vars.absmaxs,
-                                self.bad_indices.absmaxs)
-                    - self.trend  ) * NS_PER_SECOND,
+                   np.delete(self.plot_vars.absmaxs - self.trend,
+                             self.bad_indices.absmaxs) * NS_PER_SECOND,
                    marker="v", color="red", label="Abs. Maxima")
 
 def main():
