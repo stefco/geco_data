@@ -65,7 +65,7 @@
       },
       {
         "plot_properties": {
-          "#subtract_means": 150,
+          "detrend": 150,
           "handle_missing_values": "hide",
           "#ylim_top": 75,
           "#ylim_bottom": -75
@@ -75,7 +75,7 @@
       },
       {
         "plot_properties": {
-          "subtract_means": false,
+          "detrend": "none",
           "handle_missing_values": "hide",
           "ylim_top": 500,
           "ylim_bottom": -500
@@ -85,7 +85,7 @@
       },
       {
         "plot_properties": {
-          "subtract_means": false,
+          "detrend": "none",
           "handle_missing_values": "hide",
           "#ylim_top": 500,
           "#ylim_bottom": -500
@@ -95,7 +95,7 @@
       },
       {
         "plot_properties": {
-          "subtract_means": false,
+          "detrend": "none",
           "handle_missing_values": "hide",
           "ylim_top": 500,
           "ylim_bottom": -500
