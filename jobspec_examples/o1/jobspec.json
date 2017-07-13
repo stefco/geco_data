@@ -93,6 +93,7 @@
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
         "plot_properties": {
+          "detrend": "linear",
           "ylim_bottom": -500,
           "ylim_top": 500
         }
