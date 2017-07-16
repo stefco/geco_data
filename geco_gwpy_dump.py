@@ -134,6 +134,33 @@ class NDS2Exception(IOError):
     """An error thrown in association with some sort of failure to download
     data."""
 
+def indices_to_intervals(inds):
+    """Takes a list of indices and turns it into a list of start/stop indices
+    (useful for splitting an array into contiguous subintervals). If there are
+    N contiguous subintervals in the list if input indices, returns a
+    numpy.ndarray with length 2*N of the format:
+
+    [start1,end1,...,startN,endN]
+
+    >>> indices_to_intervals([0,1,2,3,9,10,11])
+    np.array([0,3,9,11])
+    """
+    # make sure the input is an np.ndarray
+    input_inds = np.array(inds)
+
+    # look for indices in contiguous chunks. find the the indices
+    # of the edges of those chunks within the list of non-filler indices.
+    change_inds = np.argwhere(input_inds[1:] != input_inds[:-1] + 1).flatten()
+
+    # use list comprehension to flatten the list of ends/starts; these are
+    # still indices into the list of nonfiller indices rather than indices into
+    # the full timeseries itself.
+    inner_inds = [ ind for subint in [ [i,i+1] for i in change_inds ]
+                       for ind in subint ]
+    all_inds = np.concatenate([[0], inner_inds, [-1]])
+    intervals = input_inds[all_inds]
+    return intervals
+
 class Query(object):
     """A channel and timespan for a single NDS query and save operation."""
     def __init__(self, start, end, channel, ext):
@@ -236,9 +263,14 @@ class Query(object):
         filled-in timeseries to disk."""
         buf = self.read()
         chan = buf.channel.name.split('.')
+        # if this query is not a minute trend (m-trend), don't bother with
+        # this; it won't work. just return. check this by noting that
+        # the trend type will be specified for m-trends, but the ',m-trend'
+        # suffix is implicit and will be left out (unlike for 's-trend', which
+        # will include the ',s-trend' suffix in the channel name)
         if (len(chan) == 1) or (',' in chan[1]):
-            raise ValueError('Tried running with non m-trend')
-        chan, trend = chan # for m-trend, 'm-trend' implicit in trend extension
+            return
+        chan, trend = chan
         missing_times = [int(x) for x in self.missing_gps_times]
         # rename original file so that we don't overwrite it
         now = datetime.datetime.now().isoformat()
@@ -264,21 +296,8 @@ class Query(object):
         timeseries that are a subset of this query's full time interval
         with all missing subintervals removed."""
         t = self.read(**kwargs)
-
         # find indices that are not just filler
-        exist = np.nonzero(t != pad)[0]
-
-        # those indices are usually in contiguous chunks. find the the indices
-        # of the edges of those chunks within the list of non-filler indices.
-        change_inds = np.argwhere(exist[1:] != exist[:-1] + 1).flatten()
-
-        # basically just flatten the list of ends/starts; these are still
-        # indices into the list of nonfiller indices rather than indices into
-        # the full timeseries itself.
-        inner_inds = [ ind for subint in [ [i,i+1] for i in change_inds ]
-                           for ind in subint ]
-        all_inds = np.concatenate([[0], inner_inds, [-1]])
-        intervals = exist[all_inds]
+        intervals = indices_to_intervals(np.nonzero(t != pad)[0])
         timeseries = []
         for i in range(len(intervals) // 2):
             timeseries.append(t[intervals[2*i]:intervals[2*i+1]+1])
