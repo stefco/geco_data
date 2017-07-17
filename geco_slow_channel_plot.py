@@ -275,9 +275,6 @@ class Plotter(Cacheable):
         """Get the ``geco_gwpy_dump.Query`` objects corresponding to this
         ``Plotter``."""
         return self.job.full_queries
-    # define a named tuple for statistics on saved values
-    Stats = collections.namedtuple('Stats', ['means', 'mins', 'maxs',
-                                             'stds', 'times', 'ns'])
     # a way of storing indices of types of bad data.
     BadIndices = collections.namedtuple('BadIndices',
                                         ['unrecorded', 'missing', 'omitted'])
@@ -285,7 +282,7 @@ class Plotter(Cacheable):
     AxisArrays = collections.namedtuple('AxisArrays', ['y_axis', 't_axis'])
     @abc.abstractproperty
     def PlotVars(self):
-        """Define a named tuple class for the data arrays that will actually be
+        """Define a class for the data arrays that will actually be
         plotted. Really just a naming convention; the properties of this class
         can be timeseries, indices for a timeseries, etc. PlotVars must include
         a ``times`` attribute or else ``t_axis`` and other methods
@@ -307,7 +304,7 @@ class Plotter(Cacheable):
         bad = {'unrecorded': dict(), 'missing': dict(), 'omitted': dict()}
         plot_vars = self.plot_vars
         # get the bad indices of each type
-        for array_name in self.PlotVars._fields:
+        for array_name in self.PlotVars.names:
             array = getattr(plot_vars, array_name)
             bad['unrecorded'][array_name] = list(get_unrecorded_indices(array))
             bad['missing'][array_name] = list(get_missing_indices(array))
@@ -318,9 +315,10 @@ class Plotter(Cacheable):
                 json.dump(bad, f, indent=2)
         # put the bad indices in PlotVars namedtuples inside a BadIndices
         # namedtuple
-        return self.BadIndices(unrecorded=self.PlotVars(**bad['unrecorded']),
-                          missing=self.PlotVars(**bad['missing']),
-                          omitted=self.PlotVars(**bad['omitted']))
+        nt = self.PlotVars.namedtuple
+        return self.BadIndices(unrecorded = nt(**bad['unrecorded']),
+                               missing = nt(**bad['missing']),
+                               omitted = nt(**bad['omitted']))
     @property
     def bad_indices(self):
         """Separate out missing and unrecorded values from cleaned timeseries
@@ -333,7 +331,7 @@ class Plotter(Cacheable):
         # variables, put them in this set:
         shared_bad_set = set()
         bad_sets = {}
-        for array_name in self.PlotVars._fields:
+        for array_name in self.PlotVars.names:
             all_bad_inds = set()
             for badness_type in self.BadIndices._fields:
                 handle_method_key = 'handle_{}_values'.format(badness_type)
@@ -351,12 +349,12 @@ class Plotter(Cacheable):
         # data have contributed to the shared set of bad indices, we can fold
         # the shared bad indices in to each list of plot-value-specific bad
         # indices.
-        for array_name in self.PlotVars._fields:
+        for array_name in self.PlotVars.names:
             bad_sets[array_name] = bad_sets[array_name].union(shared_bad_set)
             # make sure we are returning numpy arrays for our index lists
             bad_sets[array_name] = np.sort(list(bad_sets[array_name]))
         # put everything into a plot variable namedtuple
-        return self.PlotVars(**bad_sets)
+        return self.PlotVars.namedtuple(**bad_sets)
     @property
     def dq_segments(self):
         """Get the ``gwpy.segments.DataQualityFlag`` time segments
@@ -577,6 +575,9 @@ class TrendDataPlotter(Plotter):
         for q in self.queries:
             ts[q.channel] = q.read_and_split_into_segments(self.dq_segments)
         return ts
+    # define a named tuple for statistics on saved values
+    Stats = collections.namedtuple('Stats', ['means', 'mins', 'maxs',
+                                             'stds', 'times', 'ns'])
     @property
     @Cacheable._cacheable
     def stats(self):
@@ -700,20 +701,14 @@ class AbstractPlotVarHolder(object):
     @property
     def namedtuple(self):
         """Get a namedtuple corresponding to the plot_vars variable names."""
-        return collections.namedtuple(name, self.varnames)
+        return collections.namedtuple(name, self.names)
     @property
-    def varnames(self):
+    def names(self):
         """Names of the plot variables."""
         return [pvg.name for pvg in self.plot_var_generators]
     @abc.abstractproperty
     def plot_var_generators(self):
         """A list of plot_var_generators used by this class."""
-
-def PlotVarHolderFactory(newclassname, *plot_var_generators):
-    """Generate a PlotVarHolder subclass that will take a ``Plotter`` as an
-    initialization argument."""
-    return type(newclassname, (AbstractPlotVarHolder,),
-                {'plot_var_generators': plot_var_generators})
 
 ###############################################################################
 #
@@ -921,12 +916,12 @@ class IndividualPlotter(TrendDataPlotter):
         return '{}.{}{}.{}'.format(self.queries[0].fname,
                                    self.sanitized_dq_flag, desc,
                                    DEFAULT_PLOT_FILETYPE)
-    @property
-    def PlotVars(self):
-        return self.Stats
-    @property
-    def plot_vars(self):
-        return self.stats[self.queries[0].channel]
+    class PlotVars(AbstractPlotVarHolder):
+        @staticmethod
+        def _chan(plotter):
+            return self.channel + self.trend
+        plot_var_generators = [PlotVarGenerator(trend_var(k), self._chan(), k)
+                               for k in ['maxs','mins','means','stds','times']]
     @fetch_data_first(False)
     def plot_timeseries(self, ax, **kwargs):
         """Scale up by 10^9 since plots are in ns, not seconds.
@@ -995,9 +990,6 @@ class CombinedPlotter(TrendDataPlotter):
         fmt = '{}__{}__{}.{}.combined{}.{}'
         return fmt.format(self.start, self.end, ch, self.sanitized_dq_flag,
                           desc, DEFAULT_PLOT_FILETYPE)
-    PlotVars = collections.namedtuple('CombinedPlotterVars',
-                                      ['means', 'absmins', 'absmaxs',
-                                       'stds', 'times'])
     class PlotVars(AbstractPlotVarHolder):
         plot_var_generators = [
             PlotVarGenerator(trend_var('maxs'),  trend_chan('max'),  'absmaxs'),
