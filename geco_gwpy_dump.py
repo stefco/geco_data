@@ -123,6 +123,7 @@ if not (__name__ == '__main__'
 import gwpy.time
 import numpy as np
 import json
+import functools
 import multiprocessing
 import math
 import os
@@ -145,6 +146,10 @@ def indices_to_intervals(inds):
     >>> indices_to_intervals([0,1,2,3,9,10,11])
     np.array([0,3,9,11])
     """
+    # if there are no input indices, just return an empty array
+    if len(inds) == 0:
+        return np.array([], dtype=int)
+
     # make sure the input is an np.ndarray
     input_inds = np.array(inds)
 
@@ -157,7 +162,7 @@ def indices_to_intervals(inds):
     # the full timeseries itself.
     inner_inds = [ ind for subint in [ [i,i+1] for i in change_inds ]
                        for ind in subint ]
-    all_inds = np.concatenate([[0], inner_inds, [-1]])
+    all_inds = np.concatenate([[0], inner_inds, [-1]]).astype(int)
     intervals = input_inds[all_inds]
     return intervals
 
@@ -368,17 +373,24 @@ class Query(object):
                           repr(self.channel), repr(self.ext))
     # must be a staticmethod so that we can use multiprocessing on it
     @staticmethod
-    def _download_data_if_missing(query):
+    def _download_data_if_missing(query, getmethod='get'):
         """download missing data if necessary. the query contains start, end,
         channel name, and file extension information in the following format:
-            [ [start, end], channel, ext ]"""
+            [ [start, end], channel, ext ]
+        Specify whether ``fetch`` or ``get`` from gwpy should be used by
+        passing the ``getmethod`` kwargument."""
         # only download the data if the file doesn't already exist
         logging.debug(("running query: {}, \nchecking "
                        "if file exists: {}").format(repr(query), query.fname))
         if not query.file_exists():
             logging.debug("{} not found, running query.".format(repr(query)))
             try:
-                data = query.get()
+                if getmethod == 'get':
+                    data = query.get()
+                elif getmethod == 'fetch':
+                    data = query.fetch()
+                else:
+                    raise ValueError("``getmethod`` must be 'get' or 'fetch'.")
                 logging.info("query succeeded: {} saving to file".format(query))
                 data.write(query.fname)
             except RuntimeError as e:
@@ -387,15 +399,15 @@ class Query(object):
                                            query.end, e))
                 with open(query.fname_err, 'w') as f:
                     f.write('Download failed: {}'.format(e))
-    def download_data_if_missing(self):
+    def download_data_if_missing(self, getmethod='get'):
         """download missing data if necessary. the query contains start, end,
         channel name, and file extension information in the following format:
             [ [start, end], channel, ext ]"""
-        _download_data_if_missing(self)
+        _download_data_if_missing(self, getmethod=getmethod)
 
-def _download_data_if_missing(query):
+def _download_data_if_missing(query, getmethod='get'):
     """Must define this at Global level to allow for multiprocessing"""
-    Query._download_data_if_missing(query)
+    Query._download_data_if_missing(query, getmethod=getmethod)
 
 class Job(object):
     """A description of a data downloading job. Contains information on which
@@ -473,20 +485,21 @@ class Job(object):
         """split the time interval into subintervals that are each a day long,
         return that list of subintervals. returns a list of [start, stop]
         pairs."""
-        total_span = [(self.start // 60) * 60,
-                      int(math.ceil(self.end / 60.)) * 60]
-        # do we start and end cleanly at the start of new days (in gps time)?
-        first_gps_day = int(math.ceil(self.start
-                                      / float(self.max_chunk_length)))
-        last_gps_day = self.end // self.max_chunk_length
-        spans = [ [ i * self.max_chunk_length, (i+1) * self.max_chunk_length ]
-                  for i in range(first_gps_day, last_gps_day) ]
+        mchunk = self.max_chunk_length
+        # do we start and end cleanly at the start of a new chunk (in gps time)?
+        # measured in number of time chunks since GPS time 0.
+        end_first_chunk = int(math.ceil(self.start / float(mchunk)))
+        start_last_chunk = int(self.end // mchunk)
+        # if this is all happening in the same chunk, no splitting needed
+        if start_last_chunk + 1 == end_first_chunk:
+            return [[self.start, self.end]]
+        spans = [ [ i*mchunk, (i+1)*mchunk ]
+                  for i in range(end_first_chunk, start_last_chunk) ]
         # include the parts of the timespan outside of the full days
-        if total_span[0] != first_gps_day * self.max_chunk_length:
-            spans.insert(0, [total_span[0],
-                         first_gps_day * self.max_chunk_length])
-        if total_span[1] != last_gps_day * self.max_chunk_length:
-            spans.append([last_gps_day * self.max_chunk_length, total_span[1]])
+        if self.start != end_first_chunk * mchunk:
+            spans.insert(0, [self.start, end_first_chunk * mchunk])
+        if self.end != start_last_chunk * mchunk:
+            spans.append([start_last_chunk * mchunk, self.end])
         return spans
     @property
     def channels_with_trends(self):
@@ -533,11 +546,11 @@ class Job(object):
     def end_iso(self):
         """An ISO timestring of the end time of this job."""
         return gwpy.time.tconvert(self.end).isoformat()
-    def run_queries(self):
+    def run_queries(self, getmethod='get'):
         """Try to download all data, i.e. run all queries. Can use multiple
         processes to try to improve I/O performance, though by default, only
         runs in a single process."""
-        _run_queries(self, multiproc=False)
+        _run_queries(self, multiproc=False, getmethod=getmethod)
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
     def __repr__(self):
@@ -684,7 +697,7 @@ class Job(object):
             segs.pop(extraneous_key)
         return segs
 
-def _run_queries(job, multiproc=False):
+def _run_queries(job, multiproc=False, getmethod='get'):
     """Try to download all data, i.e. run all queries. Can use multiple
     processes to try to improve I/O performance, though by default, only
     runs in a single process. Must define this at the global level to allow
@@ -693,7 +706,8 @@ def _run_queries(job, multiproc=False):
         mapf = multiprocessing.Pool(processes=NUM_THREADS).map
     else:
         mapf = map
-    mapf(_download_data_if_missing, job.queries)
+    kwargs = {"getmethod": getmethod}
+    mapf(functools.partial(_download_data_if_missing, **kwargs), job.queries)
     logging.info('done downloading data.')
 
 def sanitize_for_filename(string):
