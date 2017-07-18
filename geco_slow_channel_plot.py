@@ -563,20 +563,36 @@ class Plotter(Cacheable):
         a tuple containing the best-fit line y-values for this plotter's
         t_axis, the drift coefficient, and the ``linregress`` named tuple from
         scipy.stats.linregress."""
-        r = scipy.stats.linregress(self.t_axis, self.plot_vars.means)
-        bestfit = r.slope * self.t_axis + r.intercept
-        # at time of writing, y-axis is in seconds, t-axis in days, so
-        # the linear regression slope is in seconds per day.
-        driftcoeff = r.slope / SEC_PER_DAY
+        cleandata  = np.delete(self.plot_vars.means, self.bad_indices.means)
+        cleantimes = np.delete(self.t_axis, self.bad_indices.means)
+        if len(cleandata) != 0:
+            r = scipy.stats.linregress(cleantimes, cleandata)
+            bestfit = r.slope * self.t_axis + r.intercept
+            # at time of writing, y-axis is in seconds, t-axis in days,
+            # so the linear regression slope is in seconds per day.
+            # TODO put SEC_PER_DAY as SEC_PER[self.t_unit]
+            driftcoeff = r.slope / SEC_PER_DAY
+        else:
+            bestfit = np.array([])
+            driftcoeff = 0
+            r = None
         return self.LinRegress(bestfit=bestfit, driftcoeff=driftcoeff,
                                linregress=r)
     @property
     def trend(self):
-        """Should we subtract the mean value of the timeseries from each plot?
-        if subtract means is defined as a number, then we will subtract that
-        value out instead of the mean."""
+        """Subtract the trend specified in
+        ``Plotter.plot_properties['detrend']`` from each plot. Trend can be 
+        the 'mean' value of the plot, the 'linear' least squares best fit, a
+        custom-specified number, or simply 'none' if no trend should be
+        removed."""
         if self.plot_properties['detrend'] == 'mean':
-            trend = self.plot_vars.means.mean()
+            # delete bad indices before calculating the trend, since they
+            # can skew the trend.
+            cleandata = np.delete(self.plot_vars.means, self.bad_indices.means)
+            if len(cleandata) != 0:
+                trend = cleandata.mean()
+            else:
+                trend = 0
         elif self.plot_properties['detrend'] == 'none':
             trend = 0
         elif self.plot_properties['detrend'] == 'linear':
