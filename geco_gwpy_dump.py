@@ -10,8 +10,16 @@ DEFAULT_EXTENSION = ['txt']
 # by default, download full data, i.e. no trend extension
 DEFAULT_FLAGS = ["H1:DMT-ANALYSIS_READY:1", "L1:DMT-ANALYSIS_READY:1"]
 DEFAULT_TRENDS = ['']
-SEC_PER_DAY = 86400
-DEFAULT_MAX_CHUNK = SEC_PER_DAY
+# make a dictionary of conversion factors between seconds and other time units
+# returned by ``Plotter.t_units``
+SEC_PER = {
+    "ns": 1e-9,
+    "s": 1.,
+    "minutes": 60.,
+    "days": 86400.
+}
+# download in 5 minute chunks by default
+DEFAULT_MAX_CHUNK = SEC_PER['minutes'] * 5
 DEFAULT_PAD = -1.
 INDEX_MISSING_FMT = ('{} index not found for segment {} of {}, time {}\n'
                      'Setting {} index to {}.')
@@ -53,9 +61,8 @@ etc.
 If an argument is given, that argument will be interpreted as the jobspec
 filepath.
 
-By default, data is downloaded in day-long chunks (except for the starting and
-trailing timespans, which might be shorter). Full day timespans start and end
-on gps days, so their gps times are divisible by 86400. The data spans are
+By default, data is downloaded in 5-minute-long chunks (except for the starting
+and trailing timespans, which might be shorter). The data spans are
 contiguous with no overlap.
 
 If some data cannot be fetched from the server, values of -1 will be used to
@@ -97,6 +104,7 @@ minute trends:
     "max_chunk_length": 3600
 }
 """
+# terminal color codes for pretty printing
 _GREEN = '\033[92m'
 _RED   = '\033[91m'
 _CLEAR = '\033[0m'
@@ -481,10 +489,14 @@ class Job(object):
         with open(jobspecfile, 'w') as f:
             json.dump(self.to_dict(), f)
     @property
+    def duration(self):
+        """Get the duration of this job in seconds."""
+        return self.end - self.start
+    @property
     def subspans(self):
-        """split the time interval into subintervals that are each a day long,
-        return that list of subintervals. returns a list of [start, stop]
-        pairs."""
+        """split the time interval into subintervals that are each up to the
+        ``max_chunk_length`` in duration and return that list of subintervals.
+        returns a list of [start, stop] pairs."""
         mchunk = self.max_chunk_length
         # do we start and end cleanly at the start of a new chunk (in gps time)?
         # measured in number of time chunks since GPS time 0.
@@ -495,7 +507,7 @@ class Job(object):
             return [[self.start, self.end]]
         spans = [ [ i*mchunk, (i+1)*mchunk ]
                   for i in range(end_first_chunk, start_last_chunk) ]
-        # include the parts of the timespan outside of the full days
+        # include the parts of the timespan outside of the full chunks
         if self.start != end_first_chunk * mchunk:
             spans.insert(0, [self.start, end_first_chunk * mchunk])
         if self.end != start_last_chunk * mchunk:
@@ -608,6 +620,9 @@ class Job(object):
         for q in self.full_queries:
             logging.info('Filling in missing m-trend values for {}'.format(q))
             q.fill_in_missing_m_trend()
+    @property
+    def is_finished(self):
+        return all([q.file_exists() for q in self.full_queries])
     def current_progress(self):
         """Print out current progress of this download."""
         print('{}Checking progress on job{}: {}'.format(_GREEN, _CLEAR,
@@ -640,6 +655,15 @@ class Job(object):
         summary_fmt = '{}SUMMARY{}:\n{}% done\n{}% failed\n{}% remains'
         print(summary_fmt.format(_GREEN, _CLEAR, successful_percentage,
                                  failed_percentage, in_progress_percentage))
+    def list_outfiles(self):
+        does_exist = '[{} EXISTS {}] '.format(_GREEN, _CLEAR)
+        does_not_exist = '[{} MISSING {}]'.format(_RED, _CLEAR)
+        for f in self.output_filenames:
+            if os.path.isfile(f):
+                exists = does_exist
+            else:
+                exists = does_not_exist
+            print('{} -> {}'.format(exists, f))
     @property
     def segment_filename(self):
         """The filename of HDF5 file that holds the segments specified in this
@@ -736,14 +760,7 @@ if __name__ == '__main__':
     if check_progress:
         job.current_progress()
     if list_outfiles:
-        does_exist = '[{} EXISTS {}] '.format(_GREEN, _CLEAR)
-        does_not_exist = '[{} MISSING {}]'.format(_RED, _CLEAR)
-        for f in job.output_filenames:
-            if os.path.isfile(f):
-                exists = does_exist
-            else:
-                exists = does_not_exist
-            print('{} -> {}'.format(exists, f))
+        job.list_outfiles()
     if check_progress or list_outfiles:
         exit(0)
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))

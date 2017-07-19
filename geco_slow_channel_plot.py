@@ -12,8 +12,10 @@ import multiprocessing
 import numpy as np
 import scipy.stats
 import geco_gwpy_dump
+from geco_gwpy_dump import SEC_PER
 import gwpy.segments
 import gwpy.time
+import h5py
 import collections
 import logging
 import json
@@ -115,13 +117,6 @@ DEFAULT_LEGEND_FONT = matplotlib.font_manager.FontProperties()
 DEFAULT_LEGEND_FONT.set_size('small')
 DEFAULT_AXES_POSITION = [0.125, 0.1, 0.775, 0.73]
 DEFAULT_TITLE_OFFSET = 1.07
-# make a dictionary of conversion factors between seconds and other time units
-# returned by ``Plotter.t_units``
-SEC_PER = {
-    "ns": 1e-9,
-    "s": 1.,
-    "days": 86400.
-}
 COMBINED_TRENDS = [
     ".mean,m-trend",
     ".min,m-trend",
@@ -159,7 +154,19 @@ class Cacheable(object):
         if hasattr(obj, '_cache'):
             delattr('_cache')
 
-def fetch_data_first(fetch_first):
+def fetch_data(job, multiproc=False, getmethod='fetch'):
+    """Fetch data specified for a given job."""
+    logging.info('Fetching data for job: {}'.format(job))
+    logging.debug('Running queries for job: {}'.format(job))
+    geco_gwpy_dump._run_queries(job, multiproc=multiproc, getmethod=getmethod)
+    logging.debug('Concatenating data for job: {}'.format(job))
+    job.concatenate_files()
+    # this will run even if we don't have an m-trend, in which
+    # case it will just harmlessly return.
+    logging.debug('Find missing m-trend for job: {}'.format(job))
+    job.fill_in_missing_m_trend()
+
+def fetch_data_first(fetch_first, multiproc=False, getmethod='fetch'):
     """A decorator that checks whether a given Plotter's job is done (i.e.
     whether data has been downloaded) and fetches any missing data if it
     is not yet finished. Methods that don't need to dump a ton of data before
@@ -167,25 +174,36 @@ def fetch_data_first(fetch_first):
     fetch data from NDS2 even if it hasn't been downloaded yet. Longer data
     dumps should avoid this decorator so as to avoid blocking. This can be
     overridden when the function is called by passing the ``fetch_data_first``
-    argument to the original function."""
+    argument to the original function. Can explicitly defer the decision on
+    fetching data as needed to subclasses and instances, or to the user,
+    by setting ``fetch_first`` to be 'defer'."""
     def real_decorator(func):
         def wrapper(plotter, *args, **kwargs):
+            fetch = fetch_first
             # can override the default fetching behavior by passing the
             # ``fetch_data_first`` kwarg to the function in question
             if kwargs.has_key('fetch_data_first'):
-                fetch_first = kwargs['fetch_data_first']
+                fetch = kwargs['fetch_data_first']
+            # can also automatically download data if the plotter has a
+            # ``fetch_data_first`` attribute that is set to ``True``
+            elif hasattr(plotter, 'fetch_data_first'):
+                if getattr(plotter, 'fetch_data_first') is True:
+                    fetch = True
+            # can also implicitly pass the buck to instances by omitting a
+            # default with fetch_first='defer', but if this is done, we must
+            # get the decision on the behavior from the instance or the calling
+            # user. otherwise, raise an exception.
+            elif fetch == 'defer':
+                msg = ("when deferring fetch_first, must specify value in "
+                       "instance or via kwarg.")
+                raise ValueError(msg)
+            elif not (fetch is True) and not (fetch is False):
+                msg = "``fetch_first`` must equal True, False, or 'defer'."
+                raise ValueError(msg)
             j = plotter.job
-            if not all([q.file_exists for q in j.queries]):
-                if fetch_first:
-                    logging.info('Fetching data for job: {}'.format(j))
-                    logging.debug('Running queries for job: {}'.format(j))
-                    j.run_queries()
-                    logging.debug('Concatenating data for job: {}'.format(j))
-                    j.concatenate_files()
-                    # this will run even if we don't have an m-trend, in which
-                    # case it will just harmlessly return.
-                    logging.debug('Find missing m-trend for job: {}'.format(j))
-                    j.fill_in_missing_m_trend()
+            if not j.is_finished:
+                if fetch:
+                    fetch_data(j, multiproc=multiproc, getmethod=getmethod)
                 else:
                     msg = ('Data missing for job: {}\n'
                            'Use ``fetch_data_first=True`` to automatically '
@@ -235,24 +253,157 @@ def multiprocessing_traceback(func):
             raise type(e)(msg)
     return wrapper
 
+def get_channel_trend(full_channel_name):
+    """Split an EPICS channel name with trend extension into a tuple containing
+    the bare EPICS channel name (full data) and a string for the
+    trend-extension."""
+    if '.' in full_channel_name:
+        i = full_channel_name.index('.')
+        return (full_channel_name[0:i], full_channel_name[i:])
+    else:
+        return (full_channel_name, '')
+
 @multiprocessing_traceback
 def _save_plot(plotter):
     """Must define this at the global level to allow for multiprocessing."""
     type(plotter)._save_plot(plotter)
 
-def trend_var(attr):
-    """Returns a function that takes a plotter and channel and fetches the
-    given attribute from the plotter.stats for that channel. Used for
-    TrendDataPlotter plot_vars."""
-    def getter(plotter, channels):
-        return getattr(plotter.stats[channels[0]], attr)
+###############################################################################
+#
+# PLOT VARIABLE CLASSES (For Plotter subclasses)
+#
+###############################################################################
 
-def trend_chan(trend, ext=',m-trend'):
-    """Returns a function that gets the channel name from a given plotter by
-    specifying the trend to append to that channel. Used for TrendDataPlotter
-    plot_vars."""
-    def channelmethod(plotter):
-        return ['{}.{}{}'.format(plotter.channel, trend, ext)]
+class AbstractPlotVarHolder(object):
+    """Calculate and store the values bunch of PlotVarGenerators and provide a
+    clean interface to them, e.g. plotter.plot_vars.means, while also providing
+    an interface to the methods, channels, and names of those plotters through
+    the ``methods``, ``channels``, and ``names`` attributes. Each PlotVarHolder
+    is tied to a specific ``Plotter`` instance."""
+    __metaclass__ = abc.ABCMeta
+    def __init__(self, plotter):
+        """Simply pass the plotter. Values will be calculated at initialization
+        time, but the generators and other data used to make those values will
+        still be stored in the PlotVarHolder instance for later use."""
+        self.plotter = plotter
+        for pvg in self.plot_var_generators:
+            setattr(self, pvg.name, pvg.value(plotter))
+    @property
+    def channels(self):
+        """Get a namedtuple with the channels used for each plot_var."""
+        channels = dict()
+        for pvg in self.plot_var_generators:
+            channels[pvg.name] = pvg.channelmethod(self.plotter)
+        return self.namedtuple(**channels)
+    @property
+    def methods(self):
+        """Get a namedtuple with the methods used for each plot_var. These
+        should each take a ``Plotter`` instance followed by a list of the
+        necessary channel names."""
+        return self._methods()
+    @classmethod
+    def _methods(cls):
+        methods = dict()
+        for pvg in cls._plot_var_generators():
+            methods[pvg.name] = pvg.method
+        return cls._namedtuple()(**methods)
+    @property
+    def channelmethods(self):
+        """Get a namedtuple with the channel methods (i.e. the methods used to
+        generate each channel name given a plotter) used for each plot_var."""
+        return self._channelmethods()
+    @classmethod
+    def _channelmethods(cls):
+        channelmethods = dict()
+        for pvg in cls._plot_var_generators():
+            channelmethods[pvg.name] = pvg.channelmethod
+        return cls._namedtuple()(**channelmethods)
+    @property
+    def namedtuple(self):
+        """Get a namedtuple corresponding to the plot_vars variable names."""
+        return self._namedtuple()
+    @classmethod
+    def _namedtuple(cls):
+        return collections.namedtuple('PlotVars', cls._names())
+    @property
+    def names(self):
+        """Names of the plot variables."""
+        return self._names()
+    @classmethod
+    def _names(cls):
+        return [pvg.name for pvg in cls._plot_var_generators()]
+    @property
+    def plot_var_generators(self):
+        """A list of plot_var_generators used by this class."""
+        return self._plot_var_generators()
+    #classmethod
+    @abc.abstractmethod
+    def _plot_var_generators(cls):
+        """A list of plot_var_generators that can be accessed as a class
+        method."""
+
+class FullDataPlotVars(AbstractPlotVarHolder):
+    @staticmethod
+    def _channels(plotter):
+        assert len(plotter.trends) == 1
+        return [plotter.channel + plotter.trends[0]]
+    @staticmethod
+    def _means(plotter, channels):
+        return plotter.read()[channels[0]].value
+    @staticmethod
+    def _times(plotter, channels):
+        # we don't actually use the list of channels because this Plotter
+        # subclass is so simple.
+        return plotter.read()[channels[0]].times.value
+    @classmethod
+    def _plot_var_generators(cls):
+        return [PlotVarGenerator(cls._means, cls._channels, 'means'),
+                PlotVarGenerator(cls._times, cls._channels, 'times')]
+
+class IndividualPlotVars(AbstractPlotVarHolder):
+    @staticmethod
+    def _chan(plotter):
+        return [plotter.channel + plotter.trends[0]]
+    @staticmethod
+    def _var(attr):
+        """Returns a function that takes a plotter and channel and fetches the
+        given attribute from the plotter.stats for that channel. Used for
+        TrendDataPlotter plot_vars."""
+        def getter(plotter, channels):
+            return getattr(plotter.stats[channels[0]], attr)
+        return getter
+    @classmethod
+    def _plot_var_generators(cls):
+        return [PlotVarGenerator(cls._var(k), cls._chan, k)
+                for k in ['maxs', 'mins', 'means', 'stds', 'times']]
+
+class CombinedPlotVars(AbstractPlotVarHolder):
+    """Plot variable container for CombinedPlotter."""
+    @staticmethod
+    def _var(attr):
+        """Returns a function that takes a plotter and channel and fetches the
+        given attribute from the plotter.stats for that channel. Used for
+        TrendDataPlotter plot_vars."""
+        def getter(plotter, channels):
+            return getattr(plotter.stats[channels[0]], attr)
+        return getter
+    @staticmethod
+    def _chan(trend, ext=',m-trend'):
+        """Returns a function that gets the channel name from a given plotter by
+        specifying the trend to append to that channel. Used for TrendDataPlotter
+        plot_vars."""
+        def channelmethod(plotter):
+            return ['{}.{}{}'.format(plotter.channel, trend, ext)]
+        return channelmethod
+    @classmethod
+    def _plot_var_generators(c):
+        return [
+            PlotVarGenerator(c._var('maxs'),  c._chan('max'),  'absmaxs'),
+            PlotVarGenerator(c._var('mins'),  c._chan('min'),  'absmins'),
+            PlotVarGenerator(c._var('means'), c._chan('mean'), 'means'),
+            PlotVarGenerator(c._var('times'), c._chan('mean'), 'times'),
+            PlotVarGenerator(c._var('stds'),  c._chan('mean'), 'stds')
+        ]
 
 ###############################################################################
 #
@@ -270,6 +421,12 @@ class Plotter(Cacheable):
                                   channels = [self.channel], exts = [self.ext],
                                   dq_flags = [self.dq_flag],
                                   trends = self.trends)
+    def fetch_data(self, multiproc=True, getmethod='fetch'):
+        """Fetch the data needed for this plot from local gravitational wave
+        frame files or from NDS2 using GWpy-based methods found in
+        geco_gwpy_dump. Since this is liable to be called by a user
+        interactively, it defaults to multiprocess operation."""
+        fetch_data(self.job, multiproc=multiproc, getmethod=getmethod)
     @property
     def queries(self):
         """Get the ``geco_gwpy_dump.Query`` objects corresponding to this
@@ -280,6 +437,16 @@ class Plotter(Cacheable):
                                         ['unrecorded', 'missing', 'omitted'])
     # a way of grouping t and y axis arrays.
     AxisArrays = collections.namedtuple('AxisArrays', ['y_axis', 't_axis'])
+    @abc.abstractproperty
+    def bad_time_zoom_plots(self):
+        """Make plots showing zoomed views of the bad regions of this
+        ``Plotter`` instance's data."""
+    def make_bad_time_zoom_plots(self):
+        """Save all individual plots, i.e. every channel and every dq_flag gets
+        its own plot."""
+        #mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        mapf = map
+        mapf(_save_plot, self.bad_time_zoom_plots)
     @abc.abstractproperty
     def PlotVars(self):
         """Define a class for the data arrays that will actually be
@@ -304,18 +471,25 @@ class Plotter(Cacheable):
         bad = {'unrecorded': dict(), 'missing': dict(), 'omitted': dict()}
         plot_vars = self.plot_vars
         # get the bad indices of each type
-        for array_name in self.PlotVars.names:
-            array = getattr(plot_vars, array_name)
-            bad['unrecorded'][array_name] = list(get_unrecorded_indices(array))
-            bad['missing'][array_name] = list(get_missing_indices(array))
-            bad['omitted'][array_name] = self.plot_properties['omitted_indices']
+        for varname in self.PlotVars._names():
+            array = getattr(plot_vars, varname)
+            # unfortunately, when we plot standard deviations, they can often
+            # be zero coincidentally (especially in the case of n trends,
+            # which are usually solidly e.g. 960 samples per minute, leading
+            # to spurious warnings.
+            if varname == 'stds':
+                bad['unrecorded'][varname] = list()
+            else:
+                bad['unrecorded'][varname] = list(get_unrecorded_indices(array))
+            bad['missing'][varname] = list(get_missing_indices(array))
+            bad['omitted'][varname] = self.plot_properties['omitted_indices']
         # save this data to a sidecar file for separate inspection
-        if self.plot_properties['save_sidecars']:
-            with open(self.fname_sidecar, 'w') as f:
-                json.dump(bad, f, indent=2)
+        #if self.plot_properties['save_sidecars']:
+        #    with open(self.fname_sidecar, 'w') as f:
+        #        json.dump(bad, f, indent=2)
         # put the bad indices in PlotVars namedtuples inside a BadIndices
         # namedtuple
-        nt = self.PlotVars.namedtuple
+        nt = self.PlotVars._namedtuple()
         return self.BadIndices(unrecorded = nt(**bad['unrecorded']),
                                missing = nt(**bad['missing']),
                                omitted = nt(**bad['omitted']))
@@ -331,7 +505,7 @@ class Plotter(Cacheable):
         # variables, put them in this set:
         shared_bad_set = set()
         bad_sets = {}
-        for array_name in self.PlotVars.names:
+        for array_name in self.PlotVars._names():
             all_bad_inds = set()
             for badness_type in self.BadIndices._fields:
                 handle_method_key = 'handle_{}_values'.format(badness_type)
@@ -349,12 +523,12 @@ class Plotter(Cacheable):
         # data have contributed to the shared set of bad indices, we can fold
         # the shared bad indices in to each list of plot-value-specific bad
         # indices.
-        for array_name in self.PlotVars.names:
+        for array_name in self.PlotVars._names():
             bad_sets[array_name] = bad_sets[array_name].union(shared_bad_set)
             # make sure we are returning numpy arrays for our index lists
             bad_sets[array_name] = np.sort(list(bad_sets[array_name]))
         # put everything into a plot variable namedtuple
-        return self.PlotVars.namedtuple(**bad_sets)
+        return self.PlotVars._namedtuple()(**bad_sets)
     @property
     def dq_segments(self):
         """Get the ``gwpy.segments.DataQualityFlag`` time segments
@@ -560,6 +734,25 @@ class Plotter(Cacheable):
         self.size_and_label(ax)
         return fig
 
+class PlotVarGenerator(object):
+    """A class for containing variables (that will be plotted) in a structured
+    way that preserves information about the data set the variables were
+    generated from as well as the methods used to generate the data. Each
+    PlotVarGenerator is independent of any specific ``Plotter`` instance."""
+    def __init__(self, method, channelmethod, name):
+        """Specify a method for generating this particular variable from the
+        plotter and the channel name, a method for generating the list of EPICS
+        channels needed to generate this variable using a ``Plotter`` instance
+        as input, and a name for this particular variable as it is likely
+        to appear in a plot.  The method should take a plotter instance
+        followed by the list of channels as its arguments."""
+        self.method = method
+        self.channelmethod = channelmethod
+        self.name = name
+    def value(self, plotter):
+        """Get the value of this plot variable from a given plotter."""
+        return self.method(plotter, self.channelmethod(plotter))
+
 class TrendDataPlotter(Plotter):
     """A plotter with a ``stats`` property that can be used to calculate
     statistics on a trend timeseries."""
@@ -579,6 +772,35 @@ class TrendDataPlotter(Plotter):
     Stats = collections.namedtuple('Stats', ['means', 'mins', 'maxs',
                                              'stds', 'times', 'ns'])
     @property
+    def fname_stats(self):
+        return self.fname + '.stats.hdf5'
+    def save_stats(self, stats):
+        """Save the ``CombinedPlotter.Stats`` for this Plotter to file for
+        speedier recovery in the future."""
+        with h5py.File(self.fname_stats, 'w') as f:
+            for ch in stats.keys():
+                grp = f.create_group(ch)
+                for field in stats[ch]._fields:
+                    grp.create_dataset(field, data=getattr(stats[ch], field))
+    def load_stats(self):
+        """Try loading cached ``CombinedPlotter.Stats`` from file for this
+        Plotter. If the file does not exist, an IOError will be raised."""
+        with h5py.File(self.fname_stats, 'r') as f:
+            stats = dict()
+            for q in self.queries:
+                if not set(f[q.channel].keys()) == set(self.Stats._fields):
+                    raise IOError('Missing fields from cached Stats file.')
+                stat_dict = dict()
+                for field in f[q.channel].keys():
+                    stat_dict[field] = f[q.channel][field][:]
+                stats[q.channel] = self.Stats(**stat_dict)
+            return stats
+    def del_stats(self):
+        """Delete the cached ``CombinedPlotter.Stats`` hdf5 file for this
+        Plotter from disk."""
+        if os.path.isfile(self.fname_stats):
+            os.remove(self.fname_stats)
+    @property
     @Cacheable._cacheable
     def stats(self):
         """Return a dictionary with channel/trend combinations as the keys
@@ -594,8 +816,12 @@ class TrendDataPlotter(Plotter):
         - number of sample values per segment (ns)
 
         Access like e.g. plotter.stats[channel_name].means"""
+        try:
+            return self.load_stats()
+        except IOError:
+            pass
         ts = self.read()
-        stats = {}
+        stats = dict()
         for q in self.queries:
             ch = q.channel
             means = np.array([t.mean().value for t in ts[ch]])
@@ -607,30 +833,58 @@ class TrendDataPlotter(Plotter):
             s = self.Stats(means=means, mins=mins, maxs=maxs, stds=stds,
                            times=times, ns=ns) 
             stats[ch] = s
+        self.save_stats(stats)
         return stats
+    @property
+    def bad_time_zoom_plots(self):
+        """Get a list of ``Plotters`` showing zoomed views of the messed up
+        time spans for this channel whether they be missing, unrecorded,
+        or omitted data). Will show the raw m-trend data in the time
+        segment with a fault for the trend type in which the fault was
+        discovered."""
+        zoomed_plots = list()
+        all_bad_indices = self.bad_indices
+        bad_index_types = self.bad_index_types
+        t_axis = self.t_axis
+        tlim = self.t_lim
+        segs = self.dq_segments.active
+        desc = self.channel_description
+        for pvg in self.PlotVars._plot_var_generators():
+            varname = pvg.name
+            if len(getattr(all_bad_indices, varname)) == 0:
+                continue
+            channel, trend = get_channel_trend(pvg.channelmethod(self)[0])
+            trends = [trend]
+            for badness_type in self.BadIndices._fields:
+                bad_plot_vars = getattr(bad_index_types, badness_type)
+                # only show zoomed plots for data within the plot window
+                bad_inds = filter(lambda i: tlim[0] < t_axis[i] < tlim[1],
+                                  getattr(bad_plot_vars, varname))
+                # bad_intervals = geco_gwpy_dump.indices_to_intervals(bad_inds)
+                # bad_time_intervals = self.t_axis[bad_intervals]
+                for i in bad_inds:
+                    start = segs[i].start.gpsSeconds
+                    end = segs[i].end.gpsSeconds + SEC_PER['minutes']
+                    dq_segment = segs[i]
+                    p = BadTimesZoomPlotter(start=start, end=end,
+                                            channel=channel,
+                                            dq_flag=self.dq_flag, trends=trends,
+                                            days_from_start=t_axis[i],
+                                            dq_segment=dq_segment,
+                                            dq_segment_index=i, ext=self.ext,
+                                            run=self.run,
+                                            channel_description=desc,
+                                            height=self.height,
+                                            width=self.width)
+                    zoomed_plots.append(p)
+        return zoomed_plots
 
 class FullDataPlotter(Plotter):
     """A plotter that is designed to plot full timeseries data rather than
     trend data. Accomplishes this by overriding a few of the default Plotter
     methods."""
     __metaclass__ = abc.ABCMeta
-    class PlotVars(AbstractPlotVarHolder):
-        # NB we don't actually use the list of channels in our getter funcs
-        # because this Plotter subclass is so simple and only has one channel.
-        @staticmethod
-        def _channels(plotter):
-            assert len(plotter.trends) == 1
-            return [plotter.channel + plotter.trends[0]]
-        @staticmethod
-        def _means(plotter, channels):
-            return plotter.read()[0].value
-        @staticmethod
-        def _times(plotter, channels):
-            # we don't actually use the list of channels because this Plotter
-            # subclass is so simple.
-            return plotter.read()[0].times.value
-        plot_var_generators = [PlotVarGenerator(_means, _channels, 'means'),
-                               PlotVarGenerator(_times, _channels, 'times')]
+    PlotVars = FullDataPlotVars
     @Cacheable._cacheable
     @fetch_data_first(True)
     def read(self, **kwargs):
@@ -641,82 +895,13 @@ class FullDataPlotter(Plotter):
             ts[q.channel] = q.read()
         return ts
 
-class PlotVarGenerator(object)
-    """A class for containing variables (that will be plotted) in a structured
-    way that preserves information about the data set the variables were
-    generated from as well as the methods used to generate the data. Each
-    PlotVarGenerator is independent of any specific ``Plotter`` instance."""
-    def __init__(self, channelmethod, method, name):
-        """Specify a method for generating the list of EPICS channels needed to
-        generate this variable using a ``Plotter`` instance as input, a method
-        for generating this particular variable from the plotter and the
-        channel name, and a name for this particular variable as it is likely
-        to appear in a plot.  The method should take a plotter instance
-        followed by the list of channels as its arguments."""
-        self.channelmethod = channelmethod
-        self.method = method
-        self.name = name
-    @property
-    def value(self, plotter):
-        return self.method(plotter, channelmethod(plotter))
-
-class AbstractPlotVarHolder(object):
-    """Calculate and store the values bunch of PlotVarGenerators and provide a
-    clean interface to them, e.g. plotter.plot_vars.means, while also providing
-    an interface to the methods, channels, and names of those plotters through
-    the ``methods``, ``channels``, and ``names`` attributes. Each PlotVarHolder
-    is tied to a specific ``Plotter`` instance."""
-    __metaclass__ = abc.ABCMeta
-    def __init__(self, plotter):
-        """Simply pass the plotter. Values will be calculated at initialization
-        time, but the generators and other data used to make those values will
-        still be stored in the PlotVarHolder instance for later use."""
-        self.plotter = plotter
-        for pvg in self.plot_var_generators:
-            setattr(self, pvg.value(plotter))
-    @property
-    def methods(self):
-        """Get a namedtuple with the methods used for each plot_var. These
-        should each take a ``Plotter`` instance followed by a list of the
-        necessary channel names."""
-        methods = dict()
-        for pvg in self.plot_var_generators:
-            methods[pvg.name] = pvg.method
-        return self.namedtuple(**methods)
-    @property
-    def channels(self):
-        """Get a namedtuple with the channels used for each plot_var."""
-        channels = dict()
-        for pvg in self.plot_var_generators:
-            channels[pvg.name] = pvg.channelmethod(self.plotter)
-        return self.namedtuple(**channels)
-    @property
-    def channelmethods(self):
-        """Get a namedtuple with the channel methods (i.e. the methods used to
-        generate each channel name given a plotter) used for each plot_var."""
-        channelmethods = dict()
-        for pvg in self.plot_var_generators:
-            channelmethods[pvg.name] = pvg.channelmethod
-        return self.namedtuple(**channelmethods)
-    @property
-    def namedtuple(self):
-        """Get a namedtuple corresponding to the plot_vars variable names."""
-        return collections.namedtuple(name, self.names)
-    @property
-    def names(self):
-        """Names of the plot variables."""
-        return [pvg.name for pvg in self.plot_var_generators]
-    @abc.abstractproperty
-    def plot_var_generators(self):
-        """A list of plot_var_generators used by this class."""
-
 ###############################################################################
 #
 # IMPLEMENTATION CLASSES
 #
 ###############################################################################
 
-class PlottingJob(object):
+class PlottingJob(Cacheable):
     """A description of the plots that need to be made along with methods
     for making them. Has a similar interface to ``geco_gwpy_dump.Job``, and
     in fact contains a ``Job`` as one of its properties. Uses a superset
@@ -788,6 +973,7 @@ class PlottingJob(object):
     def trends(self):
         return self.job.trends
     @property
+    @Cacheable._cacheable
     def individual_plotters(self):
         """Return a list of ``IndividualPlotter``s for this job."""
         plotters = []
@@ -811,9 +997,11 @@ class PlottingJob(object):
     def make_individual_plots(self):
         """Save all individual plots, i.e. every channel and every dq_flag gets
         its own plot."""
-        mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        #mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        mapf = map
         mapf(_save_plot, self.individual_plotters)
     @property
+    @Cacheable._cacheable
     def combined_plotters(self):
         """Return a list of ``CombinedPlotter``s for this job."""
         plotters = []
@@ -835,8 +1023,33 @@ class PlottingJob(object):
     def make_combined_plots(self):
         """Save all individual plots, i.e. every channel and every dq_flag gets
         its own plot."""
-        mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        #mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        mapf = map
         mapf(_save_plot, self.combined_plotters)
+    @property
+    @Cacheable._cacheable
+    def bad_time_zoom_plots(self):
+        """Get all zoomed plots from bad times in the ``CombinedPlotter``s
+        associated with this ``PlottingJob``. Don't bother with the bad
+        times from ``IndividualPlotter``s, though."""
+        return sum([c.bad_time_zoom_plots for c in self.combined_plotters], [])
+    @Cacheable._cacheable
+    def bad_time_double_zoom_plots(self):
+        """Get the extra-zoomed plots with full (i.e. non-trend) data for
+        the bad time regions identified in the first level bad time zoom
+        plots. This extra zoom level combined with the use of raw data
+        makes is possible to distinguish true anomalies from trend-taking
+        artifacts. These plots are hence the final step in checking data
+        quality at seemingly anomalous times."""
+        return sum([z.bad_time_zoom_plots for z in self.bad_time_zoom_plots],
+                   [])
+    def make_bad_time_zoom_plots(self):
+        """Save all zoomed plots from bad times for this ``PlottingJob``. See
+        ``PlottingJob.bad_time_zoom_plots`` for details."""
+        #mapf = multiprocessing.Pool(processes=NUM_THREADS).map
+        mapf = map
+        all_plots = self.bad_time_zoom_plots + self.bad_time_double_zoom_plots
+        mapf(_save_plot, all_plots)
 
 class IndividualPlotter(TrendDataPlotter):
     """Defines the parameters of a specific slow channel plot and provides
@@ -916,32 +1129,32 @@ class IndividualPlotter(TrendDataPlotter):
         return '{}.{}{}.{}'.format(self.queries[0].fname,
                                    self.sanitized_dq_flag, desc,
                                    DEFAULT_PLOT_FILETYPE)
-    class PlotVars(AbstractPlotVarHolder):
-        @staticmethod
-        def _chan(plotter):
-            return self.channel + self.trend
-        plot_var_generators = [PlotVarGenerator(trend_var(k), self._chan(), k)
-                               for k in ['maxs','mins','means','stds','times']]
+    PlotVars = IndividualPlotVars
     @fetch_data_first(False)
     def plot_timeseries(self, ax, **kwargs):
         """Scale up by 10^9 since plots are in ns, not seconds.
         Remove any indices considered bad in ``plot_properties``"""
-        ax.errorbar(np.delete(self.t_axis, self.bad_indices.means),
-                    np.delete(self.plot_vars.means - self.trend,
-                              self.bad_indices.means) / SEC_PER['ns'],
-                    marker="o", color="green",
-                    linestyle='none',
-                    yerr=np.delete(self.plot_vars.stds,
-                                   self.bad_indices.means) / SEC_PER['ns'],
-                    label="Means +/- Std. Dev.")
-        ax.scatter(np.delete(self.t_axis, self.bad_indices.mins),
-                   np.delete(self.plot_vars.mins - self.trend,
-                             self.bad_indices.mins) / SEC_PER['ns'],
-                   marker="^", color="blue", label="Minima")
-        ax.scatter(np.delete(self.t_axis, self.bad_indices.maxs),
-                   np.delete(self.plot_vars.maxs - self.trend,
-                             self.bad_indices.maxs) / SEC_PER['ns'],
-                   marker="v", color="red", label="Maxima")
+        # define the variables for our plots
+        y = np.delete(self.plot_vars.means - self.trend,
+                      self.bad_indices.means) / SEC_PER['ns']
+        t = np.delete(self.t_axis, self.bad_indices.means)
+        yerr = np.delete(self.plot_vars.stds,
+                         self.bad_indices.means) / SEC_PER['ns']
+        mint = np.delete(self.t_axis, self.bad_indices.mins)
+        miny = np.delete(self.plot_vars.mins - self.trend,
+                         self.bad_indices.mins) / SEC_PER['ns']
+        maxt = np.delete(self.t_axis, self.bad_indices.maxs)
+        maxy = np.delete(self.plot_vars.maxs - self.trend,
+                         self.bad_indices.maxs) / SEC_PER['ns']
+        # plot everything, but only if the plotted data has nonzero length
+        # in order to avoid an annoying matplotlib bug when adding legends.
+        if len(t) != 0:
+            ax.errorbar(t, y, marker="o", color="green", linestyle='none',
+                        yerr=yerr, label="Means +/- Std. Dev.")
+        if len(mint) != 0:
+            ax.scatter(mint, miny, marker="^", color="blue", label="Minima")
+        if len(maxt) != 0:
+            ax.scatter(maxt, maxy, marker="v", color="red", label="Maxima")
 
 class CombinedPlotter(TrendDataPlotter):
     """A class for plotting a slow channel with all trends. Used when all
@@ -990,34 +1203,32 @@ class CombinedPlotter(TrendDataPlotter):
         fmt = '{}__{}__{}.{}.combined{}.{}'
         return fmt.format(self.start, self.end, ch, self.sanitized_dq_flag,
                           desc, DEFAULT_PLOT_FILETYPE)
-    class PlotVars(AbstractPlotVarHolder):
-        plot_var_generators = [
-            PlotVarGenerator(trend_var('maxs'),  trend_chan('max'),  'absmaxs'),
-            PlotVarGenerator(trend_var('mins'),  trend_chan('min'),  'absmins'),
-            PlotVarGenerator(trend_var('means'), trend_chan('mean'), 'means'),
-            PlotVarGenerator(trend_var('times'), trend_chan('mean'), 'times'),
-            PlotVarGenerator(trend_var('stds'),  trend_chan('stds'), 'stds')
-        ]
+    PlotVars = CombinedPlotVars
     @fetch_data_first(False)
     def plot_timeseries(self, ax, **kwargs):
         """Scale up by 10^9 since plots are in ns, not seconds.
         Remove any indices considered bad in ``plot_properties``"""
-        ax.errorbar(np.delete(self.t_axis, self.bad_indices.means),
-                    np.delete(self.plot_vars.means - self.trend,
-                              self.bad_indices.means) / SEC_PER['ns'],
-                    marker="o", color="green",
-                    linestyle='none',
-                    yerr=np.delete(self.plot_vars.stds,
-                                   self.bad_indices.means) / SEC_PER['ns'],
-                    label="Means +/- Std. Dev.")
-        ax.scatter(np.delete(self.t_axis, self.bad_indices.absmins),
-                   np.delete(self.plot_vars.absmins - self.trend,
-                             self.bad_indices.absmins) / SEC_PER['ns'],
-                   marker="^", color="blue", label="Abs. Minima")
-        ax.scatter(np.delete(self.t_axis, self.bad_indices.absmaxs),
-                   np.delete(self.plot_vars.absmaxs - self.trend,
-                             self.bad_indices.absmaxs) / SEC_PER['ns'],
-                   marker="v", color="red", label="Abs. Maxima")
+        # define the variables for our plots
+        t = np.delete(self.t_axis, self.bad_indices.means)
+        y = np.delete(self.plot_vars.means - self.trend,
+                      self.bad_indices.means) / SEC_PER['ns']
+        yerr = np.delete(self.plot_vars.stds,
+                         self.bad_indices.means) / SEC_PER['ns']
+        mint = np.delete(self.t_axis, self.bad_indices.absmins)
+        miny = np.delete(self.plot_vars.absmins - self.trend,
+                         self.bad_indices.absmins) / SEC_PER['ns']
+        maxt = np.delete(self.t_axis, self.bad_indices.absmaxs)
+        maxy = np.delete(self.plot_vars.absmaxs - self.trend,
+                         self.bad_indices.absmaxs) / SEC_PER['ns']
+        # plot everything, but only if the plotted data has nonzero length
+        # in order to avoid an annoying matplotlib bug when adding legends.
+        if len(t) != 0:
+            ax.errorbar(t, y, marker="o", color="green", linestyle='none',
+                        yerr=yerr, label="Means +/- Std. Dev.")
+        if len(mint) != 0:
+            ax.scatter(mint,miny,marker="^", color="blue", label="Abs. Minima")
+        if len(maxt) != 0:
+            ax.scatter(maxt,maxy,marker="v", color="red", label="Abs. Maxima")
 
 class BadTimesZoomPlotter(FullDataPlotter):
     """A Plotter that makes zoomed in plots meant to be used for seeing
@@ -1057,6 +1268,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
         self.height = height
         self.width = width
         self.plot_properties = plot_properties
+        self.plot_properties['detrend'] = 'none'
     @property
     def title(self):
         """Get the title for this plot."""
@@ -1069,6 +1281,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
                           self.dq_segment_index, self.dq_flag)
     @property
     def fname(self):
+        ch = self.queries[0].sanitized_channel
         if self.plot_properties['fname_desc'] is None:
             desc = ""
         else:
@@ -1076,20 +1289,36 @@ class BadTimesZoomPlotter(FullDataPlotter):
         fmt = '{}__{}__{}.{}.badtime.ind__{}{}.{}'
         return fmt.format(self.start, self.end, ch, self.sanitized_dq_flag,
                           self.dq_segment_index, desc, DEFAULT_PLOT_FILETYPE)
+    @property
+    def t_lim(self):
+        """Return a tuple containing the left and right t-limits for this plot.
+        Same property as seen in ``Plotter``, but adds a bit of padding so
+        that the first and last points are clearly visible."""
+        tlim_left, tlim_right = Plotter.t_lim.fget(self)
+        margin_factor = 3e-2
+        t_span = tlim_right - tlim_left
+        tlim_left -= margin_factor * t_span
+        tlim_right += margin_factor * t_span
+        return (tlim_left, tlim_right)
     @fetch_data_first(True)
     def plot_timeseries(self, ax, **kwargs):
         ax.plot(np.delete(self.t_axis, self.bad_indices.means),
-                np.delete(self.plot_vars.means, self.bad_indices.means),
+                np.delete(self.plot_vars.means - self.trend,
+                          self.bad_indices.means) / SEC_PER['ns'],
                 marker="o", color="green", label="Recorded Signal")
         # put the start and/or end time in the plot as a vertical line
-        if self.plot_vars.times.min() <= self.start:
+        unitfactor = SEC_PER[self.t_units]
+        dq_start = (self.dq_segment.start.gpsSeconds - self.start) / unitfactor
+        dq_end = (self.dq_segment.end.gpsSeconds - self.start) / unitfactor
+        if self.t_lim[0] <= dq_start:
             forest_green = '#228B22'
-            plot_vertical_marker(ax, self.start / SEC_PER[self.t_units],
+            plot_vertical_marker(ax, [dq_start],
                                  label="Start of Segment", color=forest_green)
-        if self.end <= self.plot_vars.times.max():
+        if dq_end <= self.t_lim[1]:
             midnight_blue = '#191970'
-            plot_vertical_marker(ax, self.end / SEC_PER[self.t_units],
+            plot_vertical_marker(ax, [dq_end],
                                  label="End of Segment", color=midnight_blue)
+    @property
     def t_label(self):
         """Return the default t-axis label for a t-axis measuring days since
         the start of an observing run. ``Matplotlib`` refers to this as the
@@ -1099,6 +1328,55 @@ class BadTimesZoomPlotter(FullDataPlotter):
         if not self.run is None:
             fmt += ' during {}'.format(self.run)
         return fmt.format(self.dq_segment_index, t0, self.t_units)
+    @property
+    def bad_time_zoom_plots(self):
+        """Get a list of ``Plotters`` showing zoomed views of the messed up
+        time spans for this channel whether they be missing, unrecorded,
+        or omitted data). If this ``Plotter`` is using raw data, the list will
+        be empty, since getting higher resolution data is impossible. If this
+        ``Plotter`` is using some sort of trend data, though, the list of
+        zoomed views will show contiguous timespans from this plotter that
+        had bad values, only with the full data rather than minute trends."""
+        zoomed_plots = list()
+        if self.trends == ['']:
+            return zoomed_plots
+        all_bad_indices = self.bad_indices
+        bad_index_types = self.bad_index_types
+        t_axis = self.t_axis
+        tlim = self.t_lim
+        segs = self.dq_segments.active
+        desc = self.channel_description
+        dq_segment = self.dq_segment
+        dq_ind = self.dq_segment_index
+        channel = self.channel
+        trends = ['']
+        days_from_start = self.days_from_start
+        for pvg in self.PlotVars._plot_var_generators():
+            varname = pvg.name
+            if len(getattr(all_bad_indices, varname)) == 0:
+                continue
+            for badness_type in self.BadIndices._fields:
+                bad_plot_vars = getattr(bad_index_types, badness_type)
+                # only show zoomed plots for data within the plot window
+                bad_inds = filter(lambda i: tlim[0] < t_axis[i] < tlim[1],
+                                  getattr(bad_plot_vars, varname))
+                bad_intervals = geco_gwpy_dump.indices_to_intervals(bad_inds)
+                bad_time_intervals = self.plot_vars.times[bad_intervals]
+                for i in range(len(bad_time_intervals) // 2):
+                    start = bad_time_intervals[2*i]
+                    end = bad_time_intervals[2*i + 1]
+                    p = BadTimesZoomPlotter(start=start, end=end,
+                                            channel=channel,
+                                            dq_flag=self.dq_flag, trends=trends,
+                                            days_from_start=days_from_start,
+                                            dq_segment=dq_segment,
+                                            dq_segment_index=dq_ind,
+                                            ext=self.ext, run=self.run,
+                                            channel_description=desc,
+                                            height=self.height,
+                                            width=self.width)
+                    zoomed_plots.append(p)
+        return zoomed_plots
 
 def main():
     if len(sys.argv) == 1:
@@ -1107,6 +1385,7 @@ def main():
         plt_job = PlottingJob.load(sys.argv[1])
     plt_job.make_combined_plots()
     plt_job.make_individual_plots()
+    plt_job.make_bad_time_zoom_plots()
 
 if __name__ == "__main__":
     main()

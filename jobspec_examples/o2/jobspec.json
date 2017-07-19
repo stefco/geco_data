@@ -1,7 +1,8 @@
 {
   "start": "Mon Oct 31 16:00:00 2016",
-  "end": "Wed Jun 28 00:00:00 2017",
+  "end": "Thu Jul 13 00:00:00 2017",
   "exts": ["hdf5"],
+  "max_chunk_length": 86400,
   "channels": [
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3",
@@ -85,7 +86,7 @@
       },
       {
         "plot_properties": {
-          "detrend": "none",
+          "detrend": "linear",
           "handle_missing_values": "hide",
           "#ylim_top": 500,
           "#ylim_bottom": -500

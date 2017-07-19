@@ -2,6 +2,7 @@
   "start": "Sep 12 00:00:00 2015",
   "end": "Jan 20 00:00:00 2016",
   "exts": ["hdf5"],
+  "max_chunk_length": 86400,
   "channels": [
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3",
