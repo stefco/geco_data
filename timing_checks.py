@@ -42,7 +42,8 @@ def try_decoding_irigb(gpstime, graceid, eventdir):
     event directory exists."""
     print('Trying to generate IRIG-B Decode...')
     # don't try making this before the data is up on NDS2
-    if gwpy.time.tconvert().gpsSeconds - gpstime < SEC_BEFORE_IRIG:
+    now = datetime.datetime.now()
+    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_IRIG:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
     file_globs = ['*_H1_CAL-PCALX_IRIGB_OUT_DQ.png',
@@ -71,7 +72,8 @@ def try_plotting_duotone_delay(gpstime, eventdir):
     the output event directory exists."""
     print('Trying to generate Duotone Delay Plots...')
     # don't try making this before the data is up on NDS2
-    if gwpy.time.tconvert().gpsSeconds - gpstime < SEC_BEFORE_DTONE:
+    now = datetime.datetime.now()
+    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_DTONE:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
     file_globs = ['duotone_stat_plots_H1_*.png',
@@ -106,7 +108,8 @@ def try_making_overlay_plots(gpstime, eventdir):
     the output event directory exists."""
     print('Trying to generate Overlay Plots...')
     # don't try making this before the data is up on NDS2
-    if gwpy.time.tconvert().gpsSeconds - gpstime < SEC_BEFORE_OVERLAY:
+    now = datetime.datetime.now()
+    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_OVERLAY:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
     file_globs = ['H1..CAL-PCALX_IRIGB_OUT_DQ-Overlay-*.png',
@@ -139,13 +142,14 @@ def make_pdf_files(graceid, gpstime, eventdir):
     print('Trying to make Timing Witness Document PDF...')
     command = [os.path.join(geco_data_dir, 'timing_witness_paper.py'),
                graceid, gpstime, eventdir]
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
+    #proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+    #                        stderr=subprocess.PIPE)
+    proc = subprocess.Popen(command)
     res, err = proc.communicate()
     if proc.returncode != 0:
         raise Exception('Something went wrong generating the final PDF file.')
-        print('STDOUT: {}'.format(res))
-        print('STDERR: {}'.format(err))
+    #    print('STDOUT: {}'.format(res))
+    #    print('STDERR: {}'.format(err))
     print('Done with Timing Witness Document PDF.')
     return True
 
