@@ -132,9 +132,9 @@ We checked for deviations in duotone signal shape by stacking€ 1 second long con
 
 Beyond \textit{stacking} 1 second long segments of duotone signals on top of each other (see section 2), we also averaged the one second long waveforms and plotted the averaged DuoTone signal to verify the agreement and errors to higher accuracy.
 
-The following 12 pages (figures 5-16) show the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge, zoomed-in at different magnifications in the x-axis. When the DuoTone signals are symmetric around the 0V level, the zero crossing should be delayed compared to the second tic of the datastream by $\sim 63 \mu s$ ($6.7 \mu s$ of this is due to an inherent delay on the timing Slave-DuoTone stack (see \href{https://dcc.ligo.org/LIGO-T1500513}{LIGO-T1500513}), and the rest is due to $65536Hz$ to $16384Hz$ decimation filter (see appendix to \href{https://dcc.ligo.org/LIGO-T1500516}{LIGO-T1500516}).
+The following pages (figures 5-16) show the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge, zoomed-in at different magnifications in the x-axis. When the DuoTone signals are symmetric around the 0V level, the zero crossing should be delayed compared to the second tic of the datastream by $\sim 50.25 \mu s$ ($6.7 \mu s$ of this is due to an inherent delay on the timing Slave-DuoTone stack (see \href{https://dcc.ligo.org/LIGO-T1500513}{LIGO-T1500513}), and the rest is due to $65536Hz$ to $16384Hz$ decimation filter (see appendix to \href{https://dcc.ligo.org/LIGO-T1500516}{LIGO-T1500516}). See \href{https://dcc.ligo.org/LIGO-T1700024}{LIGO-T1700024} document for characterization of DuoTone timing witness channels for O2.
 
-On the figures the open circles reflect the average signal, the green error bars indicate the standard deviation, and the ends of the fine black error bars show the maximum/minimum for each data point. The line through the data points guide the eye to help visualize the zero crossing, which is most visible at the medium timescale plotted, and is at a bit above $63 \mu s$. The plots indicate agreement with the expected place of the zero crossing and confirm the independent verification measurement by LHO and LLO rapid response team discussed in Section 6 of this document.
+On the figures the open circles reflect the average signal, the green error bars indicate the standard deviation, and the ends of the fine black error bars show the maximum/minimum for each data point. The line through the data points guide the eye to help visualize the zero crossing, which is most visible at the medium timescale plotted, and is at a bit above $50.7 \mu s$. The plots indicate precise agreement with the expected place of the zero crossing and confirm the independent verification measurement by LHO and LLO rapid response team discussed (see EVNT log).
 
 The purpose of this study was not the measurement of the already known DuoTone delay, but to verify the stable microsecond-level performance of the timing system at around the time of the candidate event. The DuoTone witness signals indeed indicate \textit{very small errors}: The highest magnification of a representative data point (the last plot of three for each detector) shows in green the standard deviation of measurements for the point closest to the zero crossing for the hour surrounding the \graceId\ event candidate and the error bars indicate the observed maximum and minimum. 
 
@@ -146,12 +146,12 @@ The purpose of this study was not the measurement of the already known DuoTone d
 \centering
 \end{figure}
 
-%\begin{figure}[H]
-%\includegraphics[width=\textwidth]{$HX_DT_ZOOM}
-%\centering
-%\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
-%\centering
-%\end{figure}
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HX_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
 
 \begin{figure}[H]
 \includegraphics[width=\textwidth]{$HX_DT_SUPER_ZOOM}
@@ -168,12 +168,12 @@ The purpose of this study was not the measurement of the already known DuoTone d
 \centering
 \end{figure}
 
-%\begin{figure}[H]
-%\includegraphics[width=\textwidth]{$HY_DT_ZOOM}
-%\centering
-%\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
-%\centering
-%\end{figure}
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$HY_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Hanford EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
 
 \begin{figure}[H]
 \includegraphics[width=\textwidth]{$HY_DT_SUPER_ZOOM}
@@ -190,12 +190,12 @@ The purpose of this study was not the measurement of the already known DuoTone d
 \centering
 \end{figure}
 
-%\begin{figure}[H]
-%\includegraphics[width=\textwidth]{$LX_DT_ZOOM}
-%\centering
-%\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
-%\centering
-%\end{figure}
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LX_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EX for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
 
 \begin{figure}[H]
 \includegraphics[width=\textwidth]{$LX_DT_SUPER_ZOOM}
@@ -212,12 +212,12 @@ The purpose of this study was not the measurement of the already known DuoTone d
 \centering
 \end{figure}
 
-%\begin{figure}[H]
-%\includegraphics[width=\textwidth]{$LY_DT_ZOOM}
-%\centering
-%\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
-%\centering
-%\end{figure}
+\begin{figure}[H]
+\includegraphics[width=\textwidth]{$LY_DT_ZOOM}
+\centering
+\caption{Best-fit piecewise linear curve in the zero crossing region of the second-to-second average of the DuoTone witness signals around the second edge at Livingston EY for the hour surrounding the \graceId\ event candidate. The zero crossing is quite visible at this magnification and is at $\sim 63.3 \mu s$, out of which $62.6 \mu s = 6.7 \mu s$ (DuoTone generation delay) $+ 55.9 \mu s$ (decimation filter delay) of the observed delay is accounted for. This naive zero-crossing approach \textbf{does not} account for DC shift of the signal, which would place the zero-crossing away from zero-phase.}
+\centering
+\end{figure}
 
 \begin{figure}[H]
 \includegraphics[width=\textwidth]{$LY_DT_SUPER_ZOOM}
