@@ -16,43 +16,43 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
     parser.add_argument("-t", "--gpstime", type=int,
-                        help=("The GPS time about which the plots should be"
+                        help=("The GPS time about which the plots should be "
                               "centered."))
     parser.add_argument("-o", "--outdir", default=".",
                         help=("Where should the files be saved? Defaults to "
                               "the current directory."))
     parser.add_argument("-l", "--channellist",
-                        help=("Path to a text file containing the list of"
-                              "channels to plot. If not provided, this script"
-                              "will try to read the channel list in from STDIN."
-                              "The channel list should be a newline-delimited"
-                              "list of valid EPICS channel names, though"
-                              "badly-formed or invalid channel names will be"
-                              "skipped."))
+                        help=("Path to a text file containing the list of "
+                              "channels to plot. If not provided, this script "
+                              "will try to read the channel list in from "
+                              "STDIN. The channel list should be a newline-"
+                              "delimited list of valid EPICS channel names, "
+                              "though badly-formed or invalid channel names "
+                              "will be skipped."))
     parser.add_argument("-d", "--deltat", type=int, default=DT,
-                        help=("The size of the time window to be plotted. The"
-                              "generated plots will show +/- deltat seconds of"
-                              "data around the central GPS time. Defaults"
+                        help=("The size of the time window to be plotted. The "
+                              "generated plots will show +/- deltat seconds of "
+                              "data around the central GPS time. Defaults "
                               "to: {}").format(DT))
     parser.add_argument("-w", "--skipwebpage", action='store_true',
-                        help=("If this flag is provided, no preview webpage"
-                              "will be generated. By default, the webpage is"
+                        help=("If this flag is provided, no preview webpage "
+                              "will be generated. By default, the webpage is "
                               "generated."))
     parser.add_argument("-p", "--skipplots", action='store_true',
-                        help=("If this flag is provided, no plots will be"
-                              "generated (useful if you already made plots and"
-                              "just want to regenerate the webpage). By"
+                        help=("If this flag is provided, no plots will be "
+                              "generated (useful if you already made plots and "
+                              "just want to regenerate the webpage). By "
                               "default, the plots are generated."))
     parser.add_argument("-s", "--maxsimultaneous", type=int,
                         default=MAX_SIMULTANEOUS_CHANS,
-                        help=("The maximum number of simultaneous channels for"
-                              "which to fetch data at a given time. It is"
-                              "generally faster to fetch a batch of channels"
-                              "at a time, but getting too many channels at once"
+                        help=("The maximum number of simultaneous channels for "
+                              "which to fetch data at a given time. It is "
+                              "generally faster to fetch a batch of channels "
+                              "at a time, but getting too many channels at once "
                               "might slow things down. Defaults to: "
                               "{}").format(MAX_SIMULTANEOUS_CHANS))
     parser.add_argument("-v", "--verbose", action='store_true',
-                        help=("Print verbose output for status monitoring"
+                        help=("Print verbose output for status monitoring "
                               "while plotting. Defaults to False."))
     args = parser.parse_args()
 
