@@ -656,12 +656,20 @@ class Plotter(Cacheable):
             color = self.plot_properties['{}_color'.format(badness_type)]
             label = self.plot_properties['{}_label'.format(badness_type)]
             zorder = self.plot_properties['{}_zorder'.format(badness_type)]
+            # get all omitted indices. this approach is future safe, in case
+            # i allow for omissions of specific plot_vars in the future.
+            omitted = list(set.union(*[set(o) for o in
+                                       self.bad_index_types.omitted]))
             if self.plot_properties[handle_method_key] in ["mark", "markshow"]:
                 bad_inds = getattr(self.bad_index_types, badness_type)
                 # get all bad indices (mins, maxs, etc.) for this badness type
-                all_bad_inds = list(set.union(*[set(b) for b in bad_inds]))
-                if len(all_bad_inds) != 0:
-                    plot_vertical_marker(ax, self.t_axis[all_bad_inds],
+                all_inds = list(set.union(*[set(b) for b in bad_inds]))
+                # don't mark omitted indices as part of other badness types;
+                # assume the user omitted them for a reason.
+                if not badness_type is 'omitted':
+                    all_inds = filter(lambda i: not i in omitted, all_inds)
+                if len(all_inds) != 0:
+                    plot_vertical_marker(ax, self.t_axis[all_inds],
                                          zorder=zorder, label=label,
                                          color=color)
     @property
@@ -944,19 +952,32 @@ class TrendDataPlotter(Plotter):
         tlim = self.t_lim
         segs = self.dq_segments.active
         desc = self.channel_description
+        # make sure that the way we define outliers does not change
+        # for these zoomed plots; we don't want to mark spurious
+        # outliers. For BadTimesZoomPlotter, these special surviving
+        # plot properties will be folded into the defaults.
+        plot_props = dict()
+        for pp in ['outliers_lower_bound', 'outliers_upper_bound']:
+            if self.plot_properties.has_key(pp):
+                plot_props[pp] = self.plot_properties[pp]
         for pvg in self.PlotVars._plot_var_generators():
             varname = pvg.name
+            omitted = getattr(bad_index_types.omitted, varname)
             if len(getattr(all_bad_indices, varname)) == 0:
                 continue
             channel, trend = get_channel_trend(pvg.channelmethod(self)[0])
             trends = [trend]
             for badness_type in self.BadIndices._fields:
+                # don't bother with omitted indices
+                if badness_type == 'omitted':
+                    continue
                 bad_plot_vars = getattr(bad_index_types, badness_type)
+                all_inds = getattr(bad_plot_vars, varname)
+                # exclude omitted times
+                incl_inds = filter(lambda i: not i in omitted, all_inds)
                 # only show zoomed plots for data within the plot window
                 bad_inds = filter(lambda i: tlim[0] < t_axis[i] < tlim[1],
-                                  getattr(bad_plot_vars, varname))
-                # bad_intervals = geco_gwpy_dump.indices_to_intervals(bad_inds)
-                # bad_time_intervals = self.t_axis[bad_intervals]
+                                  incl_inds)
                 for i in bad_inds:
                     start = segs[i].start.gpsSeconds
                     end = segs[i].end.gpsSeconds + SEC_PER['minutes']
@@ -971,7 +992,8 @@ class TrendDataPlotter(Plotter):
                                             run=self.run,
                                             channel_description=desc,
                                             height=self.height,
-                                            width=self.width)
+                                            width=self.width,
+                                            plot_properties=plot_props)
                     zoomed_plots.append(p)
         return zoomed_plots
 
@@ -1404,7 +1426,8 @@ class BadTimesZoomPlotter(FullDataPlotter):
         self.channel_description = channel_description
         self.height = height
         self.width = width
-        self.plot_properties = plot_properties
+        self.plot_properties = DEFAULT_PLOT_PROPERTIES
+        self.plot_properties.update(plot_properties)
         self.plot_properties['detrend'] = 'none'
     @property
     def title(self):
@@ -1484,6 +1507,14 @@ class BadTimesZoomPlotter(FullDataPlotter):
         tlim = self.t_lim
         segs = self.dq_segments.active
         desc = self.channel_description
+        # make sure that the way we define outliers does not change
+        # for these zoomed plots; we don't want to mark spurious
+        # outliers. For BadTimesZoomPlotter, these special surviving
+        # plot properties will be folded into the defaults.
+        plot_props = dict()
+        for pp in ['outliers_lower_bound', 'outliers_upper_bound']:
+            if self.plot_properties.has_key(pp):
+                plot_props[pp] = self.plot_properties[pp]
         dq_segment = self.dq_segment
         dq_ind = self.dq_segment_index
         channel = self.channel
@@ -1513,7 +1544,8 @@ class BadTimesZoomPlotter(FullDataPlotter):
                                             ext=self.ext, run=self.run,
                                             channel_description=desc,
                                             height=self.height,
-                                            width=self.width)
+                                            width=self.width,
+                                            plot_properties=plot_props)
                     zoomed_plots.append(p)
         return zoomed_plots
 
