@@ -35,6 +35,10 @@ DEFAULT_PLOT_PROPERTIES = {
     "omitted_indices": list(),
     "outliers_lower_bound": -1e-6,
     "outliers_upper_bound": 1e-6,
+    "omitted_zorder": -2,
+    "missing_zorder": 101,
+    "unrecorded_zorder": 100,
+    "outliers_zorder": -1,
     "omitted_label": "Omitted Values",
     "missing_label": "Data Not Found",
     "unrecorded_label": "Data Not Taken",
@@ -46,7 +50,7 @@ DEFAULT_PLOT_PROPERTIES = {
     "handle_omitted_values": "hide",
     "handle_missing_values": "mark",
     "handle_unrecorded_values": "mark",
-    "handle_outliers_values": "mark",
+    "handle_outliers_values": "markshow",
     "detrend": 'mean',
     "detector_offline": [],
     "fname_desc": None
@@ -61,6 +65,10 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                         "data will not be displayed in plots, but "
                         "bad_index_types will still find missing and "
                         "unrecorded values in the original timeseries."),
+    "omitted_zorder": "Higher numbers plot this marker over other markers.",
+    "missing_zorder": "Higher numbers plot this marker over other markers.",
+    "unrecorded_zorder": "Higher numbers plot this marker over other markers.",
+    "outliers_zorder": "Higher numbers plot this marker over other markers.",
     "unrecorded_label": ("If ``handle_unrecorded_values`` is set to 'mark`, "
                          "mark unrecorded values on the final plot and "
                          "label them in the legend using this string."),
@@ -86,7 +94,9 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                               "will keep those indices in the plot with "
                               "their placeholder value intact (useful if "
                               "that placeholder value is suspected to be "
-                              "the true value at that point)."),
+                              "the true value at that point). ``markshow`` "
+                              "will mark the time of the omitted value but "
+                              "will keep the omitted data points in."),
     "handle_missing_values": ("``mark`` will clearly mark missing "
                               "values in the final plot and will show "
                               "the value at that index for any timeseries "
@@ -96,7 +106,9 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                               "will keep those indices in the plot with "
                               "their placeholder value intact (useful if "
                               "that placeholder value is suspected to be "
-                              "the true value at that point)."),
+                              "the true value at that point). ``markshow`` "
+                              "will mark the time of the missing value but "
+                              "will keep the missing data points in."),
     "handle_unrecorded_values": ("``mark`` will clearly mark unrecorded "
                                  "values in the final plot and will show "
                                  "the value at that index for any timeseries "
@@ -106,7 +118,9 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                                  "will keep those indices in the plot with "
                                  "their placeholder value intact (useful if "
                                  "that placeholder value is suspected to be "
-                                 "the true value at that point)."),
+                                 "the true value at that point). ``markshow`` "
+                                 "will mark the time of the unrecorded value "
+                                 "but will keep the data points in."),
     "handle_outliers_values": ("``mark`` will clearly mark outlier "
                                "values in the final plot and will show "
                                "the value at that index for any timeseries "
@@ -116,7 +130,9 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                                "will keep those indices in the plot with "
                                "their outlier value intact (useful if "
                                "that outlier value is suspected to be "
-                               "the true value at that point)."),
+                               "the true value at that point). ``markshow`` "
+                               "will mark the time of the outlier but "
+                               "will keep the outlier data points in."),
     "detrend": ("If equals 'mean', subtract means from plots. If equals "
                 "'none', do not shift the plots. If equals 'linear', remove "
                 "the linear trend from the plots. If a number, "
@@ -259,8 +275,10 @@ def get_missing_indices(array):
 def get_outlier_indices(array, minval, maxval):
     """Get indices in some array whose values are outside of some interval.
     Used, of course, to find outliers."""
-    # plus operator is elementwise logical or to numpy.
-    return np.nonzero((array <= minval) + (maxval <= array))[0]
+    # plus operator is elementwise logical or to numpy; times is and.
+    return np.nonzero(   (   (array != MISSING_VALUE_CONSTANT)
+                           * (array != UNRECORDED_VALUE_CONSTANT) )
+                       * ( (array <= minval) + (maxval <= array) ) )[0]
 
 def plot_vertical_marker(ax, t, label="marked", color="pink", marker="x",
                          zorder=100):
@@ -455,13 +473,25 @@ class Plotter(Cacheable):
         return geco_gwpy_dump.Job(start = self.start, end = self.end,
                                   channels = [self.channel], exts = [self.ext],
                                   dq_flags = [self.dq_flag],
-                                  trends = self.trends)
+                                  trends = self.trends,
+                                  max_chunk_length = self.max_chunk_length)
     def fetch_data(self, multiproc=True, getmethod='fetch'):
         """Fetch the data needed for this plot from local gravitational wave
         frame files or from NDS2 using GWpy-based methods found in
         geco_gwpy_dump. Since this is liable to be called by a user
         interactively, it defaults to multiprocess operation."""
         fetch_data(self.job, multiproc=multiproc, getmethod=getmethod)
+    @property
+    def max_chunk_length(self):
+        """Get the maximum chunk length to download at once for this channel.
+        In units of seconds. Based off of the types of trend data needed;
+        higher sample rate data should be fetched in smaller chunks."""
+        if '' in self.trends:
+            return geco_gwpy_dump.DEFAULT_MAX_CHUNK
+        elif any(['s-trend' in trend for trend in self.trends]):
+            return SEC_PER['minutes'] * 30
+        else:
+            return SEC_PER['days']
     @property
     def queries(self):
         """Get the ``geco_gwpy_dump.Query`` objects corresponding to this
@@ -623,16 +653,17 @@ class Plotter(Cacheable):
         matplotlib Axes instance."""
         for badness_type in self.BadIndices._fields:
             handle_method_key = 'handle_{}_values'.format(badness_type)
-            color_key = '{}_color'.format(badness_type)
-            label_key = '{}_label'.format(badness_type)
-            if self.plot_properties[handle_method_key] == "mark":
+            color = self.plot_properties['{}_color'.format(badness_type)]
+            label = self.plot_properties['{}_label'.format(badness_type)]
+            zorder = self.plot_properties['{}_zorder'.format(badness_type)]
+            if self.plot_properties[handle_method_key] in ["mark", "markshow"]:
                 bad_inds = getattr(self.bad_index_types, badness_type)
                 # get all bad indices (mins, maxs, etc.) for this badness type
                 all_bad_inds = list(set.union(*[set(b) for b in bad_inds]))
                 if len(all_bad_inds) != 0:
                     plot_vertical_marker(ax, self.t_axis[all_bad_inds],
-                                         label=self.plot_properties[label_key],
-                                         color=self.plot_properties[color_key])
+                                         zorder=zorder, label=label,
+                                         color=color)
     @property
     def y_label(self):
         """Get a label for the y-axis based on trend type."""
@@ -936,6 +967,7 @@ class TrendDataPlotter(Plotter):
                                             days_from_start=t_axis[i],
                                             dq_segment=dq_segment,
                                             dq_segment_index=i, ext=self.ext,
+                                            badness_type=badness_type,
                                             run=self.run,
                                             channel_description=desc,
                                             height=self.height,
@@ -1036,6 +1068,35 @@ class PlottingJob(Cacheable):
     @property
     def trends(self):
         return self.job.trends
+    def fault_taxonomy(self):
+        """Print a list of bad times and their segment numbers for each
+        combined plotter along with the type of bad time and the type of
+        plot variable that exhibits the bad values."""
+        title_fmt = geco_gwpy_dump._GREEN + '{}' + geco_gwpy_dump._CLEAR
+        varname_fmt = geco_gwpy_dump._RED + '  {}:' + geco_gwpy_dump._CLEAR
+        for c in self.combined_plotters:
+            title_not_yet_printed = True
+            rounded_times = c.t_axis.round(1)
+            for v in c.PlotVars._names():
+                varname_not_yet_printed = True
+                for bt in c.BadIndices._fields:
+                    segs = getattr(getattr(c.bad_index_types, bt), v)
+                    if len(segs) != 0:
+                        int_seg_fmt = ', '.join(['{:>5d}']*len(segs))
+                        flt_seg_fmt = ', '.join(['{:>5.1f}']*len(segs))
+                        if title_not_yet_printed:
+                            title_not_yet_printed = False
+                            print(title_fmt.format(c.title))
+                            print c.channel_description + ': ' + c.channel
+                            print 'BAD SEGMENTS (units: ' + c.t_units + ')'
+                        if varname_not_yet_printed:
+                            varname_not_yet_printed = False
+                            print varname_fmt.format(v)
+                        segments = int_seg_fmt.format(*segs)
+                        times = flt_seg_fmt.format(*rounded_times[segs])
+                        print '    {}:'.format(bt)
+                        print '      segments: [{}]'.format(segments)
+                        print '      times:    [{}]'.format(times)
     @property
     @Cacheable._cacheable
     def individual_plotters(self):
@@ -1302,6 +1363,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
     the start and end of that data segment."""
     def __init__(self, start, end, channel, dq_flag, trends,
                  days_from_start, dq_segment, dq_segment_index, 
+                 badness_type='bad',
                  ext=geco_gwpy_dump.DEFAULT_EXTENSION,
                  run=None, channel_description=None,
                  height=DEFAULT_HEIGHT, width=DEFAULT_WIDTH,
@@ -1326,6 +1388,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
         self.days_from_start = days_from_start
         self.dq_segment = dq_segment
         self.dq_segment_index = dq_segment_index
+        self.badness_type = badness_type
         self.trends = trends
         self.ext = ext
         self.run = run
@@ -1339,11 +1402,11 @@ class BadTimesZoomPlotter(FullDataPlotter):
         """Get the title for this plot."""
         start = gwpy.time.from_gps(self.start)
         end = gwpy.time.from_gps(self.end)
-        fmt = 'Bad Segment in {} from {} to {}\nSegment no. {} from Flag {}'
+        fmt = 'Fault: {} in {} in Segment no. {}\nFlag {} from {} to {}'
         if not self.run is None:
             fmt += ' during {}'.format(self.run)
-        return fmt.format(self.channel_description, start, end,
-                          self.dq_segment_index, self.dq_flag)
+        return fmt.format(self.badness_type, self.channel_description,
+                          self.dq_segment_index, self.dq_flag, start, end)
     @property
     def fname(self):
         ch = self.queries[0].sanitized_channel
@@ -1351,9 +1414,10 @@ class BadTimesZoomPlotter(FullDataPlotter):
             desc = ""
         else:
             desc = "." + self.plot_properties['fname_desc']
-        fmt = '{}__{}__{}.{}.badtime.ind__{}{}.{}'
+        fmt = '{}__{}__{}.{}.badtime.{}.ind__{}{}.{}'
         return fmt.format(self.start, self.end, ch, self.sanitized_dq_flag,
-                          self.dq_segment_index, desc, DEFAULT_PLOT_FILETYPE)
+                          self.badness_type, self.dq_segment_index, desc,
+                          DEFAULT_PLOT_FILETYPE)
     @property
     def t_lim(self):
         """Return a tuple containing the left and right t-limits for this plot.
@@ -1434,6 +1498,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
                                             channel=channel,
                                             dq_flag=self.dq_flag, trends=trends,
                                             days_from_start=days_from_start,
+                                            badness_type=badness_type,
                                             dq_segment=dq_segment,
                                             dq_segment_index=dq_ind,
                                             ext=self.ext, run=self.run,
