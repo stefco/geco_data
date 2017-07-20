@@ -33,31 +33,50 @@ DEFAULT_PLOT_FILETYPE = 'png'
 DEFAULT_PLOT_PROPERTIES = {
     "save_sidecars": True,
     "omitted_indices": list(),
+    "outliers_lower_bound": -1e-6,
+    "outliers_upper_bound": 1e-6,
     "omitted_label": "Omitted Values",
     "missing_label": "Data Not Found",
     "unrecorded_label": "Data Not Taken",
+    "outliers_label": "Outliers",
     "omitted_color": "#41e5f4",             # teal, sorta
     "missing_color": "purple",
     "unrecorded_color": "orange",
+    "outliers_color": "black",
     "handle_omitted_values": "hide",
     "handle_missing_values": "mark",
     "handle_unrecorded_values": "mark",
+    "handle_outliers_values": "mark",
     "detrend": 'mean',
     "detector_offline": [],
-    "find_unrecorded": True,
     "fname_desc": None
 }
 PLOT_PROPERTY_DESCRIPTIONS = {
     "save_sidecars": ("If true, save a sidecar file with missing and "
                      "unrecorded data saved in it for easier investigation."),
+    "outliers_lower_bound": "Smallest value not considered an outlier [s].",
+    "outliers_upper_bound": "Largest value not considered an outlier [s].",
     "omitted_indices": ("Optionally, provide a list of indices that should be "
                         "removed from the timeseries before plotting. This "
                         "data will not be displayed in plots, but "
                         "bad_index_types will still find missing and "
                         "unrecorded values in the original timeseries."),
-    "omitted_legend": ("If ``handle_omitted_values`` is set to 'mark`, we "
-                       "will mark omitted values on the final plot and will "
+    "unrecorded_label": ("If ``handle_unrecorded_values`` is set to 'mark`, "
+                         "mark unrecorded values on the final plot and "
+                         "label them in the legend using this string."),
+    "missing_label": ("If ``handle_missing_values`` is set to 'mark`, we "
+                      "will mark missing values on the final plot and "
+                      "label them in the legend using this string."),
+    "omitted_label": ("If ``handle_omitted_values`` is set to 'mark`, we "
+                      "will mark omitted values on the final plot and will "
+                      "label them in the legend using this string."),
+    "outliers_label": ("If ``handle_outliers_values`` is set to 'mark`, we "
+                       "will mark outlier values on the final plot and "
                        "label them in the legend using this string."),
+    "omitted_color": "Color for omitted value time markers on plot.",
+    "missing_color": "Color for missing value time markers on plot.",
+    "unrecorded_color": "Color for unrecorded value time markers on plot.",
+    "outliers_color": "Color for outlier time markers on plot.",
     "handle_omitted_values": ("``mark`` will clearly mark omitted indices "
                               "in the final plot but will NOT show "
                               "the value at that index for ANY timeseries "
@@ -88,12 +107,21 @@ PLOT_PROPERTY_DESCRIPTIONS = {
                                  "their placeholder value intact (useful if "
                                  "that placeholder value is suspected to be "
                                  "the true value at that point)."),
+    "handle_outliers_values": ("``mark`` will clearly mark outlier "
+                               "values in the final plot and will show "
+                               "the value at that index for any timeseries "
+                               "that does not contain outliers "
+                               "(DEFAULT). ``hide`` will remove those "
+                               "indices entirely from the plot. ``ignore`` "
+                               "will keep those indices in the plot with "
+                               "their outlier value intact (useful if "
+                               "that outlier value is suspected to be "
+                               "the true value at that point)."),
     "detrend": ("If equals 'mean', subtract means from plots. If equals "
                 "'none', do not shift the plots. If equals 'linear', remove "
                 "the linear trend from the plots. If a number, "
                 "subtract that number from the plots."),
     "detector_offline": "List of GPS start/stop tuples when detector was off",
-    "find_unrecorded": "Should times when data was not taken be found/plotted?",
     "fname_desc": ("A description of this particular plot, to be appended to "
                    "the plot filename. Useful for cases when multiple "
                    "plots with different options are to be made for the same "
@@ -228,7 +256,14 @@ def get_missing_indices(array):
     have been saved somewhere."""
     return np.nonzero(array == MISSING_VALUE_CONSTANT)[0]
 
-def plot_vertical_marker(ax, t, label="marked", color="pink", marker="x"):
+def get_outlier_indices(array, minval, maxval):
+    """Get indices in some array whose values are outside of some interval.
+    Used, of course, to find outliers."""
+    # plus operator is elementwise logical or to numpy.
+    return np.nonzero((array <= minval) + (maxval <= array))[0]
+
+def plot_vertical_marker(ax, t, label="marked", color="pink", marker="x",
+                         zorder=100):
     """Plot a vertical marker (of the sort used to mark bad indices) to the
     supplied ``matplotlib`` Axes object."""
     # we will want to reset the original y limits after adding these markers,
@@ -237,7 +272,7 @@ def plot_vertical_marker(ax, t, label="marked", color="pink", marker="x"):
     y_offset = (ylim[1] + ylim[0]) / 2.
     y_span = (ylim[1] - ylim[0])
     ax.errorbar(t, len(t)*[y_offset], color=color, linestyle='none',
-                zorder=100, marker=marker, label=label, yerr=4*y_span)
+                zorder=zorder, marker=marker, label=label, yerr=4*y_span)
     ax.set_ylim(ylim)
 
 def multiprocessing_traceback(func):
@@ -434,7 +469,8 @@ class Plotter(Cacheable):
         return self.job.full_queries
     # a way of storing indices of types of bad data.
     BadIndices = collections.namedtuple('BadIndices',
-                                        ['unrecorded', 'missing', 'omitted'])
+                                        ['unrecorded', 'missing', 'omitted',
+                                         'outliers'])
     # a way of grouping t and y axis arrays.
     AxisArrays = collections.namedtuple('AxisArrays', ['y_axis', 't_axis'])
     @abc.abstractproperty
@@ -468,7 +504,10 @@ class Plotter(Cacheable):
         Indices are named on a per-variable basis for the variables used in
         each plot. For example, access the missing values in the mean
         timerseries using ``plotter.bad_index_types.missing.means``"""
-        bad = {'unrecorded': dict(), 'missing': dict(), 'omitted': dict()}
+        bad = {'unrecorded': dict(), 'missing': dict(), 'omitted': dict(),
+               'outliers': dict()}
+        minval = self.plot_properties['outliers_lower_bound']
+        maxval = self.plot_properties['outliers_upper_bound']
         plot_vars = self.plot_vars
         # get the bad indices of each type
         for varname in self.PlotVars._names():
@@ -483,6 +522,15 @@ class Plotter(Cacheable):
                 bad['unrecorded'][varname] = list(get_unrecorded_indices(array))
             bad['missing'][varname] = list(get_missing_indices(array))
             bad['omitted'][varname] = self.plot_properties['omitted_indices']
+            # times will obviously be outside of the range of accepted
+            # outliers. also exclude "n" trend values, since these should
+            # usually be in the hundreds.
+            if varname == 'times' or self.trends[0][0:2] == '.n':
+                bad['outliers'][varname] = list()
+            else:
+                bad['outliers'][varname] = list(get_outlier_indices(array,
+                                                                    minval,
+                                                                    maxval))
         # save this data to a sidecar file for separate inspection
         #if self.plot_properties['save_sidecars']:
         #    with open(self.fname_sidecar, 'w') as f:
@@ -492,7 +540,8 @@ class Plotter(Cacheable):
         nt = self.PlotVars._namedtuple()
         return self.BadIndices(unrecorded = nt(**bad['unrecorded']),
                                missing = nt(**bad['missing']),
-                               omitted = nt(**bad['omitted']))
+                               omitted = nt(**bad['omitted']),
+                               outliers = nt(**bad['outliers']))
     @property
     def bad_indices(self):
         """Separate out missing and unrecorded values from cleaned timeseries
@@ -569,8 +618,8 @@ class Plotter(Cacheable):
         if self.plot_properties.has_key('ylim_top'):
             ax.set_ylim(top=self.plot_properties['ylim_top'])
     def plot_bad_value_markers(self, ax):
-        """If there are bad values (missing, unrecorded, or purposefully
-        omitted), plot any that are supposed to be marked on the given
+        """If there are bad values (missing, unrecorded, purposefully omitted,
+        or outliers), plot any that are supposed to be marked on the given
         matplotlib Axes instance."""
         for badness_type in self.BadIndices._fields:
             handle_method_key = 'handle_{}_values'.format(badness_type)
@@ -682,18 +731,33 @@ class Plotter(Cacheable):
         a tuple containing the best-fit line y-values for this plotter's
         t_axis, the drift coefficient, and the ``linregress`` named tuple from
         scipy.stats.linregress."""
-        r = scipy.stats.linregress(self.t_axis, self.plot_vars.means)
-        bestfit = r.slope * self.t_axis + r.intercept
-        driftcoeff = r.slope / SEC_PER[self.t_units]
+        cleandata  = np.delete(self.plot_vars.means, self.bad_indices.means)
+        cleantimes = np.delete(self.t_axis, self.bad_indices.means)
+        if len(cleandata) != 0:
+            r = scipy.stats.linregress(cleantimes, cleandata)
+            bestfit = r.slope * self.t_axis + r.intercept
+            driftcoeff = r.slope / SEC_PER[self.t_units]
+        else:
+            bestfit = 0
+            driftcoeff = 0
+            r = None
         return self.LinRegress(bestfit=bestfit, driftcoeff=driftcoeff,
                                linregress=r)
     @property
     def trend(self):
-        """Should we subtract the mean value of the timeseries from each plot?
-        if subtract means is defined as a number, then we will subtract that
-        value out instead of the mean."""
+        """Subtract the trend specified in
+        ``Plotter.plot_properties['detrend']`` from each plot. Trend can be 
+        the 'mean' value of the plot, the 'linear' least squares best fit, a
+        custom-specified number, or simply 'none' if no trend should be
+        removed."""
         if self.plot_properties['detrend'] == 'mean':
-            trend = self.plot_vars.means.mean()
+            # delete bad indices before calculating the trend, since they
+            # can skew the trend.
+            cleandata = np.delete(self.plot_vars.means, self.bad_indices.means)
+            if len(cleandata) != 0:
+                trend = cleandata.mean()
+            else:
+                trend = 0
         elif self.plot_properties['detrend'] == 'none':
             trend = 0
         elif self.plot_properties['detrend'] == 'linear':
@@ -1033,6 +1097,7 @@ class PlottingJob(Cacheable):
         associated with this ``PlottingJob``. Don't bother with the bad
         times from ``IndividualPlotter``s, though."""
         return sum([c.bad_time_zoom_plots for c in self.combined_plotters], [])
+    @property
     @Cacheable._cacheable
     def bad_time_double_zoom_plots(self):
         """Get the extra-zoomed plots with full (i.e. non-trend) data for
@@ -1311,12 +1376,12 @@ class BadTimesZoomPlotter(FullDataPlotter):
         dq_start = (self.dq_segment.start.gpsSeconds - self.start) / unitfactor
         dq_end = (self.dq_segment.end.gpsSeconds - self.start) / unitfactor
         if self.t_lim[0] <= dq_start:
-            forest_green = '#228B22'
-            plot_vertical_marker(ax, [dq_start],
-                                 label="Start of Segment", color=forest_green)
+            deep_pink = '#FF1493'
+            plot_vertical_marker(ax, [dq_start], zorder=200,
+                                 label="Start of Segment", color=deep_pink)
         if dq_end <= self.t_lim[1]:
             midnight_blue = '#191970'
-            plot_vertical_marker(ax, [dq_end],
+            plot_vertical_marker(ax, [dq_end], zorder=200,
                                  label="End of Segment", color=midnight_blue)
     @property
     def t_label(self):
@@ -1332,10 +1397,10 @@ class BadTimesZoomPlotter(FullDataPlotter):
     def bad_time_zoom_plots(self):
         """Get a list of ``Plotters`` showing zoomed views of the messed up
         time spans for this channel whether they be missing, unrecorded,
-        or omitted data). If this ``Plotter`` is using raw data, the list will
-        be empty, since getting higher resolution data is impossible. If this
-        ``Plotter`` is using some sort of trend data, though, the list of
-        zoomed views will show contiguous timespans from this plotter that
+        omitted, or outlier data). If this ``Plotter`` is using raw data, the
+        list will be empty, since getting higher resolution data is impossible.
+        If this ``Plotter`` is using some sort of trend data, though, the list
+        of zoomed views will show contiguous timespans from this plotter that
         had bad values, only with the full data rather than minute trends."""
         zoomed_plots = list()
         if self.trends == ['']:
@@ -1364,7 +1429,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
                 bad_time_intervals = self.plot_vars.times[bad_intervals]
                 for i in range(len(bad_time_intervals) // 2):
                     start = bad_time_intervals[2*i]
-                    end = bad_time_intervals[2*i + 1]
+                    end = bad_time_intervals[2*i + 1] + SEC_PER['minutes']
                     p = BadTimesZoomPlotter(start=start, end=end,
                                             channel=channel,
                                             dq_flag=self.dq_flag, trends=trends,
