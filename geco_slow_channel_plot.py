@@ -1068,19 +1068,28 @@ class PlottingJob(Cacheable):
     @property
     def trends(self):
         return self.job.trends
-    def fault_taxonomy(self):
+    def fault_taxonomy(self, fault_types=['missing', 'unrecorded', 'outliers']):
         """Print a list of bad times and their segment numbers for each
         combined plotter along with the type of bad time and the type of
         plot variable that exhibits the bad values."""
         title_fmt = geco_gwpy_dump._GREEN + '{}' + geco_gwpy_dump._CLEAR
         varname_fmt = geco_gwpy_dump._RED + '  {}:' + geco_gwpy_dump._CLEAR
         for c in self.combined_plotters:
+            start, end = c.t_lim
             title_not_yet_printed = True
-            rounded_times = c.t_axis.round(1)
+            t_axis = c.t_axis
+            rounded_times = t_axis.round(1)
             for v in c.PlotVars._names():
                 varname_not_yet_printed = True
-                for bt in c.BadIndices._fields:
-                    segs = getattr(getattr(c.bad_index_types, bt), v)
+                omitted = getattr(c.bad_index_types.omitted, v)
+                for bt in fault_types:
+                    # don't bother with omitted indices; these have been
+                    # looked at by a human already.
+                    all_segs = getattr(getattr(c.bad_index_types, bt), v)
+                    # only include segments that are not omitted
+                    incl_segs = filter(lambda i: not i in omitted, all_segs)
+                    # only show bad times for data within the plot window
+                    segs = filter(lambda i: start < t_axis[i] < end, incl_segs)
                     if len(segs) != 0:
                         int_seg_fmt = ', '.join(['{:>5d}']*len(segs))
                         flt_seg_fmt = ', '.join(['{:>5.1f}']*len(segs))
