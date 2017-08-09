@@ -46,7 +46,7 @@ def try_decoding_irigb(gpstime, graceid, eventdir):
     event directory exists."""
     print('Trying to generate IRIG-B Decode...')
     # don't try making this before the data is up on NDS2
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_IRIG:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
@@ -76,7 +76,7 @@ def try_plotting_duotone_delay(gpstime, eventdir):
     the output event directory exists."""
     print('Trying to generate Duotone Delay Plots...')
     # don't try making this before the data is up on NDS2
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_DTONE:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
@@ -112,7 +112,7 @@ def try_making_overlay_plots(gpstime, eventdir):
     the output event directory exists."""
     print('Trying to generate Overlay Plots...')
     # don't try making this before the data is up on NDS2
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_OVERLAY:
         raise NDS2AvailabilityException()
     # if the files already exist, just return
@@ -160,7 +160,7 @@ def make_pdf_files(graceid, gpstime, eventdir):
 def main(gpstime, graceid, debug):
     """Generate missing files."""
     eventdir = os.path.expanduser('~/public_html/events/{}'.format(graceid))
-    print('Starting at {}'.format(datetime.datetime.now().isoformat()))
+    print('Starting at {}'.format(datetime.datetime.utcnow().isoformat()))
     if not os.path.isdir(eventdir):
         os.makedirs(eventdir)
     os.chdir(eventdir)
