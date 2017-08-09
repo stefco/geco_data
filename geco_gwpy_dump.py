@@ -6,7 +6,7 @@
 NUM_THREADS = 6     # number of parallel download threads
 VERBOSE_GWPY = True
 ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
-DEFAULT_EXTENSION = ['txt']
+DEFAULT_EXTENSION = ['hdf5']
 # by default, download full data, i.e. no trend extension
 DEFAULT_FLAGS = ["H1:DMT-ANALYSIS_READY:1", "L1:DMT-ANALYSIS_READY:1"]
 DEFAULT_TRENDS = ['']
