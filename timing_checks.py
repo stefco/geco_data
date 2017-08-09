@@ -12,7 +12,11 @@ if __name__ == '__main__':
                         help=('The GraceDB ID for this event.'))
     parser.add_argument('-t', '--gpstime', type=int, required=True,
                         help=('The GPS time at which this event occured.'))
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help=('Print debug information.'))
     args = parser.parse_args()
+    if args.debug:
+        print(format(args))
 import glob
 import sys
 import os
@@ -61,9 +65,9 @@ def try_decoding_irigb(gpstime, graceid, eventdir):
                             stderr=subprocess.PIPE)
     res, err = proc.communicate()
     if proc.returncode != 0:
-        raise Exception('Something went wrong generating IRIG-B decode plots.')
         print('STDOUT: {}'.format(res))
         print('STDERR: {}'.format(err))
+        raise Exception('Something went wrong generating IRIG-B decode plots.')
     print('Done with IRIG-B Decode.')
     return True
 
@@ -93,13 +97,13 @@ def try_plotting_duotone_delay(gpstime, eventdir):
     res_h, err_h = proc_h.communicate()
     res_l, err_l = proc_l.communicate()
     if proc_h.returncode != 0:
-        raise Exception('Something went wrong generating H1 duotone delays.')
         print('STDOUT: {}'.format(res_h))
         print('STDERR: {}'.format(err_h))
+        raise Exception('Something went wrong generating H1 duotone delays.')
     if proc_l.returncode != 0:
-        raise Exception('Something went wrong generating L1 duotone delays.')
         print('STDOUT: {}'.format(res_l))
         print('STDERR: {}'.format(err_l))
+        raise Exception('Something went wrong generating L1 duotone delays.')
     print('Done with Duotone Delay Plots.')
     return True
 
@@ -130,9 +134,9 @@ def try_making_overlay_plots(gpstime, eventdir):
                             stderr=subprocess.PIPE)
     res, err = proc.communicate()
     if proc.returncode != 0:
-        raise Exception('Something went wrong generating overlay plots.')
         print('STDOUT: {}'.format(res))
         print('STDERR: {}'.format(err))
+        raise Exception('Something went wrong generating overlay plots.')
     print('Done with Overlay Plots.')
     return True
 
@@ -153,7 +157,7 @@ def make_pdf_files(graceid, gpstime, eventdir):
     print('Done with Timing Witness Document PDF.')
     return True
 
-def main(gpstime, graceid):
+def main(gpstime, graceid, debug):
     """Generate missing files."""
     eventdir = os.path.expanduser('~/public_html/events/{}'.format(graceid))
     print('Starting at {}'.format(datetime.datetime.now().isoformat()))
@@ -161,6 +165,8 @@ def main(gpstime, graceid):
         os.makedirs(eventdir)
     os.chdir(eventdir)
     print('made eventdir and changed to it: {}'.format(eventdir))
+    if debug:
+        print('current directory: {}'.format(os.getcwd()))
     # make little convenience files containing the GPS time and GraceID
     for varname in ['graceid', 'gpstime']:
         fname = varname + '.txt'
@@ -180,4 +186,4 @@ def main(gpstime, graceid):
     make_pdf_files(graceid, str(gpstime), eventdir)
 
 if __name__ == '__main__':
-    main(args.gpstime, args.graceid)
+    main(args.gpstime, args.graceid, args.debug)
