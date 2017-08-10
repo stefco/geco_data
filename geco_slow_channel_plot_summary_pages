@@ -1,13 +1,17 @@
 #!/bin/bash
-# (c) Stefan Countryman
+# (c) Stefan Countryman, 2017
 # Make a plots for jobspec and put them in public_html for browser viewing on
 # ldas-pcdev2.ligo.caltech.edu
 
 olddir=old-plots-`date +%s`
-mkdir ~/public_html/slow-channels/${olddir}
+mkdir -p ~/public_html/slow-channels/${olddir}
 DATE=`date`
 
-for jobdir in ~/slow-channel-scratch/o{1,2}_slow_channels; do
+# set default command-line arg values if no channels are specified
+if [ "$#" -eq 0 ]; then
+    set -- ~/slow-channel-scratch/o{1,2}_slow_channels
+
+for jobdir in "$@"; do
     echo "on jobdir ${jobdir}"
     # get git revision and date
     pushd ~/dev/geco_data
