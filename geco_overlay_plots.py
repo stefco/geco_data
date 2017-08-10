@@ -38,7 +38,6 @@ ZOOMS = {
 
 # quits immediately on --help or -h flags to avoid slow imports
 if __name__ == "__main__":
-    """Define an argument parser with default values for this script."""
     parser = argparse.ArgumentParser(description=DESC)
     parser.add_argument("-t", "--gpstime", type=float,
                         help="The GPS time of this event.")
