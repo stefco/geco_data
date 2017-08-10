@@ -101,6 +101,6 @@ if proc.returncode != 0:
 
 # make a copy of the file with the appropriate filename for DCC upload; will
 # overwrite the old file.
-dcc_name = 'aLIGO_BBH_Candidate_TimingWitness_{}.pdf'.format(graceid)
+dcc_name = 'aLIGO_Event_Candidate_TimingWitness_{}.pdf'.format(graceid)
 shutil.copy(os.path.join(outdir, 'main.pdf'),
             os.path.join(outdir, dcc_name))
