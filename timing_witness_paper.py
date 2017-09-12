@@ -100,7 +100,8 @@ if proc.returncode != 0:
     raise Exception('Something went wrong while generating the PDF file.')
 
 # make a copy of the file with the appropriate filename for DCC upload; will
-# overwrite the old file.
-dcc_name = 'aLIGO_BBH_Candidate_TimingWitness_{}.pdf'.format(graceid)
+# overwrite the old file. this file version lacks a DCC number, since we
+# aren't making those automatically.
+dcc_name = 'aLIGO_BBH_Candidate_TimingWitness_{}_NODCC.pdf'.format(graceid)
 shutil.copy(os.path.join(outdir, 'main.pdf'),
             os.path.join(outdir, dcc_name))

@@ -1,20 +1,51 @@
 #!/usr/bin/env python
 # (c) Stefan Countryman 2017
 
-DESC="""Run Timing checks and save results to a LIGO viewable webpage."""
+DESC="""Run Timing checks and save results to a LIGO viewable webpage. If
+--gpstime or --graceid are not provided, read them from 'gpstime.txt' or
+'graceid.txt', respectively."""
 
 # run argparse before imports so that we don't waste the user's time
 # with imports if they are just seeking --help; imports come after
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
-    parser.add_argument('-g', '--graceid', required=True,
-                        help=('The GraceDB ID for this event.'))
-    parser.add_argument('-t', '--gpstime', type=int, required=True,
-                        help=('The GPS time at which this event occured.'))
-    parser.add_argument('-d', '--debug', action='store_true',
-                        help=('Print debug information.'))
+    parser.add_argument(
+        '-g',
+        '--graceid',
+        default=None,
+        help="""
+             The GraceDB ID for this event.
+             """
+    )
+    parser.add_argument(
+        '-t',
+        '--gpstime',
+        type=int,
+        default=None,
+        help="""
+             The GPS time at which this event occured.
+             """
+    )
+    parser.add_argument(
+        '-d',
+        '--debug',
+        action='store_true',
+        help="""
+             Print debug information.
+             """
+    )
     args = parser.parse_args()
+    # read values from text files if args not provided
+    for key in ['graceid', 'gpstime']:
+        if getattr(args, key) is None:
+            try:
+                with open(key + '.txt') as infile:
+                    setattr(args, key, infile.read())
+            except IOError:
+                parser.print_help()
+                exit(1)
+    args.gpstime = int(args.gpstime)
     if args.debug:
         print(format(args))
 import glob
