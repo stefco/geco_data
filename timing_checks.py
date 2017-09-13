@@ -84,7 +84,7 @@ if __name__ == '__main__':
         import ligo.gracedb.rest
         client = ligo.gracedb.rest.GraceDb()
         print('Reading GPS time from GraceDb...')
-        event = client.event('G297595').json()
+        event = client.event(args.graceid).json()
         args.gpstime = int(event['gpstime'])
         print('Got GPS time: {}'.format(args.gpstime))
 
@@ -185,7 +185,7 @@ class ProcRunner(object):
         If it failed, raise an exception including full stderr and stdout
         (unless either or both are muted)."""
         res, err = self.proc.communicate()
-        if proc.returncode != 0:
+        if self.proc.returncode != 0:
             errdesc = ""
             if not self.muteout:
                 errdesc += 'STDOUT:\n\n{}\n\n'.format(res)
@@ -218,6 +218,7 @@ class FileGenerator(object):
         ``commands``    Is a list of commands that can be understood
                         by subprocess.Popen, i.e. each is a list of strings
                         constituting arguments.
+        ``execpath``    Path prefix for the executable.
         ``min_delay``   Is the minimum amount of time to wait after the start
                         of the event before trying to make the files.
         ``gpstime``     Is the time of the event for which these files are
@@ -233,6 +234,7 @@ class FileGenerator(object):
         self.desc = desc
         self.file_globs = file_globs
         self.commands = commands
+        self.execpath = execpath
         self.min_delay = min_delay
         self.gpstime = gpstime
         self.graceid = graceid
@@ -246,8 +248,6 @@ class FileGenerator(object):
         """Check whether each glob file exists and is unique."""
         import glob
         if all([len(glob.glob(g)) == 1 for g in file_globs]):
-            if self.verbose:
-                print('{}: files exist!'.format(self.desc))
             return True
         else:
             return False
@@ -277,16 +277,16 @@ class FileGenerator(object):
             raise InputFilesUnavailableException(
                 "Input files not ready: {}".format(self.desc)
             )
-            self.runners = [
-                ProcRunner(
-                    cmd = cmd,
-                    desc = self.desc,
-                    execpath = self.execpath,
-                    muteout = self.muteout,
-                    muteerr = self.muteerr
-                ).run()
-                for cmd in self.commands
-            ]
+        self.runners = [
+            ProcRunner(
+                cmd = cmd,
+                desc = self.desc,
+                execpath = self.execpath,
+                muteout = self.muteout,
+                muteerr = self.muteerr
+            ).run()
+            for cmd in self.commands
+        ]
     def wait(self):
         """Wait for all running processes to finish. If not processes have
         been started, raise a ValueError. Return ``True`` if all finished."""
@@ -302,9 +302,19 @@ def start_as_data_becomes_available(file_generators, debug=False):
     """Start each generator as the data becomes available on NDS2. Returns
     once all of them are ready."""
     running_generators = []
+    loops = 0
     while len(file_generators) > 0:
+        if debug:
+            print(loops)
+            print("[File Generators:] {}".format(file_generators))
+        loops += 1
+        print('Time: {}'.format(datetime.datetime.now()))
         for fg in file_generators:
+            if debug:
+                print('On generator: {}'.format(fg.desc))
             try:
+                if debug:
+                    print('Trying to start: {}'.format(fg.desc))
                 fg.run()
                 if debug:
                     print('Generator started: {}'.format(fg.desc))
@@ -313,7 +323,6 @@ def start_as_data_becomes_available(file_generators, debug=False):
             except NDS2AvailabilityException:
                 if debug:
                     print('Generator not ready: {}'.format(fg.desc))
-                pass
             except JobDoneException:
                 if debug:
                     print('Files done, not running: {}'.format(fg.desc))
@@ -321,6 +330,8 @@ def start_as_data_becomes_available(file_generators, debug=False):
             except InputFilesUnavailableException:
                 if debug:
                     print('Infiles not ready, not running: {}'.format(fg.desc))
+        if debug:
+            print('Exiting loop & sleeping {}'.format(datetime.datetime.now()))
         time.sleep(SLEEP_TIME)
     return running_generators
 
@@ -328,7 +339,7 @@ def enter_event_directory(graceid, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
                           debug=False):
     """Define the directory for this event. Also change to that directory and
     return the path to that directory."""
-    eventdir = os.path.expanduser(os.path.join(graceid))
+    eventdir = os.path.expanduser(os.path.join(eventdirpre, graceid))
     print('Starting at {}'.format(datetime.datetime.utcnow().isoformat()))
     if not os.path.isdir(eventdir):
         os.makedirs(eventdir)
@@ -397,7 +408,7 @@ def main(gpstime, graceid, dccnum=None, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
                 file_globs = [],
                 input_globs = IN_GLOBS_FOR_PDF,
                 commands = [
-                    ['timing_witness_paper.py', graceid, gpstime, '.']
+                    ['timing_witness_paper.py', graceid, str(gpstime), '.']
                 ],
                 execpath = GECO_DATA_DIR,
                 muteout = True,
