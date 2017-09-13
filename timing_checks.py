@@ -111,7 +111,8 @@ SEC_BEFORE_IRIG = 60
 SEC_BEFORE_DTONE = 60 * 12
 SEC_BEFORE_OVERLAY = 60 * 18
 
-# what file patterns do we expect for each script?
+# What file patterns do we expect each script to produce? If they exist,
+# the script succeeded
 GLOBS_FOR_IRIGB = [
     '*_H1_CAL-PCALX_IRIGB_OUT_DQ.png',
     '*_H1_CAL-PCALY_IRIGB_OUT_DQ.png',
@@ -133,7 +134,10 @@ GLOBS_FOR_OVERLAY = [
     'L1..CAL-PCALX_FPGA_DTONE_IN1_DQ-Overlay-*.png',
     'L1..CAL-PCALY_FPGA_DTONE_IN1_DQ-Overlay-*.png'
 ]
-GLOBS_FOR_PDF = GLOBS_FOR_IRIGB + GLOBS_FOR_DTONE + GLOBS_FOR_OVERLAY
+
+# What file patterns does each script need? If they exist, the script can
+# be made.
+IN_GLOBS_FOR_PDF = GLOBS_FOR_IRIGB + GLOBS_FOR_DTONE + GLOBS_FOR_OVERLAY
 
 # how long to wait before retrying?
 SLEEP_TIME = 10
@@ -141,6 +145,15 @@ SLEEP_TIME = 10
 class NDS2AvailabilityException(IOError):
     """An exception indicating that you are trying to download data before it
     is likely to be available on NDS2."""
+
+
+class JobDoneException(IOError):
+    """An exception indicating that the output files already exist and that
+    the job should not run again."""
+
+class InputFilesUnavailableException(IOError):
+    """An exception indicating that the input files required for this job
+    are unavailable."""
 
 
 class ProcRunner(object):
@@ -196,23 +209,26 @@ class FileGenerator(object):
     """
     def __init__(self, desc, file_globs, commands, execpath="", min_delay=0,
                  gpstime=None, graceid=None, verbose=True, muteout=False,
-                 muteerr=False):
+                 muteerr=False, input_globs=[], force_rerun=False):
         """Specify the command to run.
 
-        ``desc``        describes the process.
-        ``file_globs``  is a list of glob expressions for the required files.
+        ``desc``        Describes the process.
+        ``file_globs``  Is a list of glob expressions for the required files.
                         if all files exist, the generator does not need to run.
-        ``commands``    is a list of commands that can be understood
+        ``commands``    Is a list of commands that can be understood
                         by subprocess.Popen, i.e. each is a list of strings
                         constituting arguments.
-        ``min_delay``   is the minimum amount of time to wait after the start
+        ``min_delay``   Is the minimum amount of time to wait after the start
                         of the event before trying to make the files.
-        ``gpstime``     is the time of the event for which these files are
+        ``gpstime``     Is the time of the event for which these files are
                         being made.
-        ``graceid``     is the graceid of the relevant event.
-        ``verbose``     print info to console
-        ``muteout``     mute stderr for subprocesses
-        ``muteerr``     mute stderr for subprocesses
+        ``graceid``     Is the graceid of the relevant event.
+        ``verbose``     Print info to console.
+        ``muteout``     Mute stderr for subprocesses.
+        ``muteerr``     Mute stderr for subprocesses.
+        ``input_globs`` Glob patterns representing filenames for data that
+                        needs to exist for this job to run.
+        ``force_rerun`` Rerun the job even if the output files exist.
         """
         self.desc = desc
         self.file_globs = file_globs
@@ -223,31 +239,44 @@ class FileGenerator(object):
         self.verbose = verbose
         self.muteout = muteout
         self.muteerr = muteerr
+        self.input_globs = input_globs
+        self.force_rerun = force_rerun
         self.runners = None
-    def isdone(self):
-        """Check if the files are generated. Optionally print an indication
-        that the files are done (default: True)"""
+    def _globs_all_exist(self, file_globs):
+        """Check whether each glob file exists and is unique."""
         import glob
-        if all([len(glob.glob(g)) == 1 for g in self.file_globs]):
+        if all([len(glob.glob(g)) == 1 for g in file_globs]):
             if self.verbose:
                 print('{}: files exist!'.format(self.desc))
             return True
         else:
             return False
+    def isdone(self):
+        """Check if the files are generated. Optionally print an indication
+        that the files are done (default: True)"""
+        return self._globs_all_exist(self.file_globs)
+    def infilesready(self):
+        """Check if the input files needed for the job are available."""
+        return self._globs_all_exist(self.input_globs)
     def ready(self):
         """Check if enough time has passed for us to try making these
         files."""
         import datetime
         import gwpy
         now = gwpy.time.tconvert(datetime.datetime.utcnow()).gpsSeconds
-        return now - self.gpstime < self.min_delay
+        return now - self.gpstime > self.min_delay
     def run(self):
         """Start running processes and set self.runners to be the list of
         ProcRunners currently running. Raises an NDS2AvailabilityException
         if the file is not yet ready to be made."""
         if not self.ready():
             raise NDS2AvailabilityException("Not ready: {}".format(self.desc))
-        if not self.isdone():
+        if self.isdone() and (not self.force_rerun):
+            raise JobDoneException("Out files exist: {}".format(self.desc))
+        if not self.infilesready():
+            raise InputFilesUnavailableException(
+                "Input files not ready: {}".format(self.desc)
+            )
             self.runners = [
                 ProcRunner(
                     cmd = cmd,
@@ -260,13 +289,13 @@ class FileGenerator(object):
             ]
     def wait(self):
         """Wait for all running processes to finish. If not processes have
-        been started, raise a ValueError. Return ``True`` if all succeeded."""
+        been started, raise a ValueError. Return ``True`` if all finished."""
         if self.runners is None:
             raise ValueError("No runners yet: {}".format(self.desc))
-        succeeded = all([runner.complete() for runner in self.runners])
-        if succeeded and self.verbose:
+        finished = all([runner.complete() for runner in self.runners])
+        if finished and self.verbose:
             print('Done with: {}'.format(self.desc))
-        return succeeded
+        return finished
 
 
 def start_as_data_becomes_available(file_generators, debug=False):
@@ -285,6 +314,13 @@ def start_as_data_becomes_available(file_generators, debug=False):
                 if debug:
                     print('Generator not ready: {}'.format(fg.desc))
                 pass
+            except JobDoneException:
+                if debug:
+                    print('Files done, not running: {}'.format(fg.desc))
+                file_generators.remove(fg)
+            except InputFilesUnavailableException:
+                if debug:
+                    print('Infiles not ready, not running: {}'.format(fg.desc))
         time.sleep(SLEEP_TIME)
     return running_generators
 
@@ -358,7 +394,8 @@ def main(gpstime, graceid, dccnum=None, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
             ),
             FileGenerator(
                 desc = "Timing Witness PDF document",
-                file_globs = GLOBS_FOR_PDF,
+                file_globs = [],
+                input_globs = IN_GLOBS_FOR_PDF,
                 commands = [
                     ['timing_witness_paper.py', graceid, gpstime, '.']
                 ],
@@ -366,7 +403,8 @@ def main(gpstime, graceid, dccnum=None, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
                 muteout = True,
                 muteerr = True,
                 gpstime = gpstime,
-                graceid = graceid
+                graceid = graceid,
+                force_rerun = True
             )
         ],
         debug = debug
