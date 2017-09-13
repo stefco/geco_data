@@ -4,6 +4,7 @@
 DESC="""Run Timing checks and save results to a LIGO viewable webpage. If
 --gpstime or --graceid are not provided, read them from 'gpstime.txt' or
 'graceid.txt', respectively."""
+DEFAULT_EVENT_DIR_PREFIX = "~/public_html/events/"
 
 # run argparse before imports so that we don't waste the user's time
 # with imports if they are just seeking --help; imports come after
@@ -15,7 +16,9 @@ if __name__ == '__main__':
         '--graceid',
         default=None,
         help="""
-             The GraceDB ID for this event.
+             The GraceDB ID for this event. You can either specify this as a
+             command line argument or store a file called "graceid.txt" in
+             the current directory.
              """
     )
     parser.add_argument(
@@ -24,8 +27,30 @@ if __name__ == '__main__':
         type=int,
         default=None,
         help="""
-             The GPS time at which this event occured.
+             The GPS time at which this event occured. You can either specify
+             this as a command line argument or store a file called
+             "gpstime.txt" in the current directory. If no GPS time is
+             provided, the script will attempt to get the GPS time from
+             GraceDB.
              """
+    )
+    parser.add_argument(
+        '-n',
+        '--dccnum',
+        default=None,
+        help="""
+             The DCC number for the Timing Witness document. Not required,
+             but without it, the output PDF will not cointain a DCC number
+             and will only have a placeholder instead.
+             """
+    )
+    parser.add_argument(
+        '-p',
+        '--eventdir-prefix',
+        default=DEFAULT_EVENT_DIR_PREFIX,
+        help="""
+             The default place where event directories go. Defaults to: {}
+             """.format(DEFAULT_EVENT_DIR_PREFIX)
     )
     parser.add_argument(
         '-d',
@@ -36,18 +61,39 @@ if __name__ == '__main__':
              """
     )
     args = parser.parse_args()
-    # read values from text files if args not provided
-    for key in ['graceid', 'gpstime']:
+
+    def read_arg_from_file_if_possible(args, key, required=False):
+        """Read values from text files if args not provided. Error out and
+        print help string if the arg is required but is not found anywhere."""
         if getattr(args, key) is None:
             try:
                 with open(key + '.txt') as infile:
                     setattr(args, key, infile.read())
             except IOError:
-                parser.print_help()
-                exit(1)
+                if required:
+                    parser.print_help()
+                    exit(1)
+
+    # try to read in required arguments if they weren't provided
+    read_arg_from_file_if_possible(args, 'graceid', required=True)
+    read_arg_from_file_if_possible(args, 'gpstime')
+    read_arg_from_file_if_possible(args, 'dccnum')
+
+    # try to get the gps time from gracedb if it was not provided
+    if args.gpstime is None:
+        import ligo.gracedb.rest
+        client = ligo.gracedb.rest.GraceDb()
+        print('Reading GPS time from GraceDb...')
+        event = client.event('G297595').json()
+        args.gpstime = int(event['gpstime'])
+        print('Got GPS time: {}'.format(args.gpstime))
+
+    # make sure gpstime is an integer
     args.gpstime = int(args.gpstime)
+
     if args.debug:
         print(format(args))
+
 import glob
 import sys
 import os
@@ -58,12 +104,36 @@ import gwpy.time
 import time
 
 # location of geco_data scripts
-geco_data_dir = os.path.dirname(os.path.realpath(__file__))
+GECO_DATA_DIR = os.path.dirname(os.path.realpath(__file__))
 
 # how long to wait before trying to make these files?
 SEC_BEFORE_IRIG = 60
 SEC_BEFORE_DTONE = 60 * 12
 SEC_BEFORE_OVERLAY = 60 * 18
+
+# what file patterns do we expect for each script?
+GLOBS_FOR_IRIGB = [
+    '*_H1_CAL-PCALX_IRIGB_OUT_DQ.png',
+    '*_H1_CAL-PCALY_IRIGB_OUT_DQ.png',
+    '*_L1_CAL-PCALX_IRIGB_OUT_DQ.png',
+    '*_L1_CAL-PCALY_IRIGB_OUT_DQ.png',
+    '*-decoded-times.txt'
+]
+GLOBS_FOR_DTONE = [
+    'duotone_stat_plots_H1_*.png',
+    'duotone_stat_plots_L1_*.png'
+]
+GLOBS_FOR_OVERLAY = [
+    'H1..CAL-PCALX_IRIGB_OUT_DQ-Overlay-*.png',
+    'H1..CAL-PCALY_IRIGB_OUT_DQ-Overlay-*.png',
+    'L1..CAL-PCALX_IRIGB_OUT_DQ-Overlay-*.png',
+    'L1..CAL-PCALY_IRIGB_OUT_DQ-Overlay-*.png',
+    'H1..CAL-PCALX_FPGA_DTONE_IN1_DQ-Overlay-*.png',
+    'H1..CAL-PCALY_FPGA_DTONE_IN1_DQ-Overlay-*.png',
+    'L1..CAL-PCALX_FPGA_DTONE_IN1_DQ-Overlay-*.png',
+    'L1..CAL-PCALY_FPGA_DTONE_IN1_DQ-Overlay-*.png'
+]
+GLOBS_FOR_PDF = GLOBS_FOR_IRIGB + GLOBS_FOR_DTONE + GLOBS_FOR_OVERLAY
 
 # how long to wait before retrying?
 SLEEP_TIME = 10
@@ -72,125 +142,157 @@ class NDS2AvailabilityException(IOError):
     """An exception indicating that you are trying to download data before it
     is likely to be available on NDS2."""
 
-def try_decoding_irigb(gpstime, graceid, eventdir):
-    """Try to make the decoded IRIG-B files for this event. Assumes the output
-    event directory exists."""
-    print('Trying to generate IRIG-B Decode...')
-    # don't try making this before the data is up on NDS2
-    now = datetime.datetime.utcnow()
-    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_IRIG:
-        raise NDS2AvailabilityException()
-    # if the files already exist, just return
-    file_globs = ['*_H1_CAL-PCALX_IRIGB_OUT_DQ.png',
-                  '*_H1_CAL-PCALY_IRIGB_OUT_DQ.png',
-                  '*_L1_CAL-PCALX_IRIGB_OUT_DQ.png',
-                  '*_L1_CAL-PCALY_IRIGB_OUT_DQ.png',
-                  '{}-decoded-times.txt'.format(graceid)]
-    # we expect 1 matching file per file pattern
-    if all([len(glob.glob(g)) == 1 for g in file_globs]):
-        print('IRIG-B Decode plots already exist! Skipping.')
+
+class ProcRunner(object):
+    """Run processes silently and asynchronously. Check for successful
+    completion.
+    """
+    def __init__(self, cmd, desc=None, execpath="", muteout=False,
+                 muteerr=False):
+        self.cmd = cmd
+        self.desc = desc
+        self.execpath = execpath
+        self.muteout = muteout
+        self.muteerr = muteerr
+        self.proc = None
+    def run(self):
+        """Run a system command silently in the background. This ProcRunner
+        is returned, making it easy to chain commands."""
+        import os
+        import subprocess
+        self.cmd[0] = os.path.join(self.execpath, self.cmd[0])
+        self.proc = subprocess.Popen(
+            self.cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        return self
+    def complete(self):
+        """Wait for this process to complete. Return true if successful.
+        If it failed, raise an exception including full stderr and stdout
+        (unless either or both are muted)."""
+        res, err = self.proc.communicate()
+        if proc.returncode != 0:
+            errdesc = ""
+            if not self.muteout:
+                errdesc += 'STDOUT:\n\n{}\n\n'.format(res)
+            if not self.muteerr:
+                errdesc += 'STDERR:\n\n{}\n\n'.format(err)
+            if self.desc is None:
+                errdesc += "Something went wrong."
+            else:
+                errdesc += "Something went wrong: {}".format(self.desc)
+            raise Exception(errdesc)
         return True
-    command = [os.path.join(geco_data_dir, 'irig-b-decode-commands.py'),
-               '-t', str(gpstime), '-g', graceid]
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    res, err = proc.communicate()
-    if proc.returncode != 0:
-        print('STDOUT: {}'.format(res))
-        print('STDERR: {}'.format(err))
-        raise Exception('Something went wrong generating IRIG-B decode plots.')
-    print('Done with IRIG-B Decode.')
-    return True
 
-def try_plotting_duotone_delay(gpstime, eventdir):
-    """Try to make the DuoTone histogram and delay plots for this event. Assumes
-    the output event directory exists."""
-    print('Trying to generate Duotone Delay Plots...')
-    # don't try making this before the data is up on NDS2
-    now = datetime.datetime.utcnow()
-    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_DTONE:
-        raise NDS2AvailabilityException()
-    # if the files already exist, just return
-    file_globs = ['duotone_stat_plots_H1_*.png',
-                  'duotone_stat_plots_L1_*.png']
-    # we expect 1 matching file per file pattern
-    if all([len(glob.glob(g)) == 1 for g in file_globs]):
-        print('Duotone Delay plots already exist! Skipping.')
-        return True
-    command_h = [os.path.join(geco_data_dir, 'duotone_delay.py'),
-                 '--stat', '--ifo', 'H1', '-t', str(gpstime)]
-    command_l = [os.path.join(geco_data_dir, 'duotone_delay.py'),
-                 '--stat', '--ifo', 'L1', '-t', str(gpstime)]
-    proc_h = subprocess.Popen(command_h, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-    proc_l = subprocess.Popen(command_l, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-    res_h, err_h = proc_h.communicate()
-    res_l, err_l = proc_l.communicate()
-    if proc_h.returncode != 0:
-        print('STDOUT: {}'.format(res_h))
-        print('STDERR: {}'.format(err_h))
-        raise Exception('Something went wrong generating H1 duotone delays.')
-    if proc_l.returncode != 0:
-        print('STDOUT: {}'.format(res_l))
-        print('STDERR: {}'.format(err_l))
-        raise Exception('Something went wrong generating L1 duotone delays.')
-    print('Done with Duotone Delay Plots.')
-    return True
 
-def try_making_overlay_plots(gpstime, eventdir):
-    """Try to make the DuoTone and IRIG-B overlay plots for this event. Assumes
-    the output event directory exists."""
-    print('Trying to generate Overlay Plots...')
-    # don't try making this before the data is up on NDS2
-    now = datetime.datetime.utcnow()
-    if gwpy.time.tconvert(now).gpsSeconds - gpstime < SEC_BEFORE_OVERLAY:
-        raise NDS2AvailabilityException()
-    # if the files already exist, just return
-    file_globs = ['H1..CAL-PCALX_IRIGB_OUT_DQ-Overlay-*.png',
-                  'H1..CAL-PCALY_IRIGB_OUT_DQ-Overlay-*.png',
-                  'L1..CAL-PCALX_IRIGB_OUT_DQ-Overlay-*.png',
-                  'L1..CAL-PCALY_IRIGB_OUT_DQ-Overlay-*.png',
-                  'H1..CAL-PCALX_FPGA_DTONE_IN1_DQ-Overlay-*.png',
-                  'H1..CAL-PCALY_FPGA_DTONE_IN1_DQ-Overlay-*.png',
-                  'L1..CAL-PCALX_FPGA_DTONE_IN1_DQ-Overlay-*.png',
-                  'L1..CAL-PCALY_FPGA_DTONE_IN1_DQ-Overlay-*.png']
-    # we expect 1 matching file per file pattern
-    if all([len(glob.glob(g)) == 1 for g in file_globs]):
-        print('Overlay plots already exist! Skipping.')
-        return True
-    command = [os.path.join(geco_data_dir, 'geco_overlay_plots.py'),
-               '-t', str(gpstime)]
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    res, err = proc.communicate()
-    if proc.returncode != 0:
-        print('STDOUT: {}'.format(res))
-        print('STDERR: {}'.format(err))
-        raise Exception('Something went wrong generating overlay plots.')
-    print('Done with Overlay Plots.')
-    return True
+class FileGenerator(object):
+    """Check whether files have been generated by looking for matching blob
+    expressions in the current directory. If they have not all been
+    generated, rerun the generating command. Don't try to generate the files
+    at all unless a minimum delay has been exceeded. All commands will be
+    run in parallel.
+    
+    """
+    def __init__(self, desc, file_globs, commands, execpath="", min_delay=0,
+                 gpstime=None, graceid=None, verbose=True, muteout=False,
+                 muteerr=False):
+        """Specify the command to run.
 
-def make_pdf_files(graceid, gpstime, eventdir):
-    """Try to make the final output PDF file, i.e. the Timing Witness
-    Document that will be uploaded to DCC."""
-    print('Trying to make Timing Witness Document PDF...')
-    command = [os.path.join(geco_data_dir, 'timing_witness_paper.py'),
-               graceid, gpstime, eventdir]
-    #proc = subprocess.Popen(command, stdout=subprocess.PIPE,
-    #                        stderr=subprocess.PIPE)
-    proc = subprocess.Popen(command)
-    res, err = proc.communicate()
-    if proc.returncode != 0:
-        raise Exception('Something went wrong generating the final PDF file.')
-    #    print('STDOUT: {}'.format(res))
-    #    print('STDERR: {}'.format(err))
-    print('Done with Timing Witness Document PDF.')
-    return True
+        ``desc``        describes the process.
+        ``file_globs``  is a list of glob expressions for the required files.
+                        if all files exist, the generator does not need to run.
+        ``commands``    is a list of commands that can be understood
+                        by subprocess.Popen, i.e. each is a list of strings
+                        constituting arguments.
+        ``min_delay``   is the minimum amount of time to wait after the start
+                        of the event before trying to make the files.
+        ``gpstime``     is the time of the event for which these files are
+                        being made.
+        ``graceid``     is the graceid of the relevant event.
+        ``verbose``     print info to console
+        ``muteout``     mute stderr for subprocesses
+        ``muteerr``     mute stderr for subprocesses
+        """
+        self.desc = desc
+        self.file_globs = file_globs
+        self.commands = commands
+        self.min_delay = min_delay
+        self.gpstime = gpstime
+        self.graceid = graceid
+        self.verbose = verbose
+        self.muteout = muteout
+        self.muteerr = muteerr
+        self.runners = None
+    def isdone(self):
+        """Check if the files are generated. Optionally print an indication
+        that the files are done (default: True)"""
+        import glob
+        if all([len(glob.glob(g)) == 1 for g in self.file_globs]):
+            if self.verbose:
+                print('{}: files exist!'.format(self.desc))
+            return True
+        else:
+            return False
+    def ready(self):
+        """Check if enough time has passed for us to try making these
+        files."""
+        import datetime
+        import gwpy
+        now = gwpy.time.tconvert(datetime.datetime.utcnow()).gpsSeconds
+        return now - self.gpstime < self.min_delay
+    def run(self):
+        """Start running processes and set self.runners to be the list of
+        ProcRunners currently running. Raises an NDS2AvailabilityException
+        if the file is not yet ready to be made."""
+        if not self.ready():
+            raise NDS2AvailabilityException("Not ready: {}".format(self.desc))
+        if not self.isdone():
+            self.runners = [
+                ProcRunner(
+                    cmd = cmd,
+                    desc = self.desc,
+                    execpath = self.execpath,
+                    muteout = self.muteout,
+                    muteerr = self.muteerr
+                ).run()
+                for cmd in self.commands
+            ]
+    def wait(self):
+        """Wait for all running processes to finish. If not processes have
+        been started, raise a ValueError. Return ``True`` if all succeeded."""
+        if self.runners is None:
+            raise ValueError("No runners yet: {}".format(self.desc))
+        succeeded = all([runner.complete() for runner in self.runners])
+        if succeeded and self.verbose:
+            print('Done with: {}'.format(self.desc))
+        return succeeded
 
-def main(gpstime, graceid, debug):
-    """Generate missing files."""
-    eventdir = os.path.expanduser('~/public_html/events/{}'.format(graceid))
+
+def start_as_data_becomes_available(file_generators, debug=False):
+    """Start each generator as the data becomes available on NDS2. Returns
+    once all of them are ready."""
+    running_generators = []
+    while len(file_generators) > 0:
+        for fg in file_generators:
+            try:
+                fg.run()
+                if debug:
+                    print('Generator started: {}'.format(fg.desc))
+                running_generators.append(fg)
+                file_generators.remove(fg)
+            except NDS2AvailabilityException:
+                if debug:
+                    print('Generator not ready: {}'.format(fg.desc))
+                pass
+        time.sleep(SLEEP_TIME)
+    return running_generators
+
+def enter_event_directory(graceid, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
+                          debug=False):
+    """Define the directory for this event. Also change to that directory and
+    return the path to that directory."""
+    eventdir = os.path.expanduser(os.path.join(graceid))
     print('Starting at {}'.format(datetime.datetime.utcnow().isoformat()))
     if not os.path.isdir(eventdir):
         os.makedirs(eventdir)
@@ -198,23 +300,90 @@ def main(gpstime, graceid, debug):
     print('made eventdir and changed to it: {}'.format(eventdir))
     if debug:
         print('current directory: {}'.format(os.getcwd()))
+        print('"./": {}'.format(os.path.realpath('.')))
+    return eventdir
+
+def main(gpstime, graceid, dccnum=None, eventdirpre=DEFAULT_EVENT_DIR_PREFIX,
+         debug=False):
+    """Generate missing files asyncronously as they become available."""
+    enter_event_directory(graceid, eventdirpre=eventdirpre, debug=debug)
+
     # make little convenience files containing the GPS time and GraceID
     for varname in ['graceid', 'gpstime']:
         fname = varname + '.txt'
         if not os.path.isfile(fname):
             with open(fname, 'w') as f:
                 f.write(str(locals()[varname]))
-    # try generating files
-    done = False
-    while not done:
-        try:
-            done = ( try_decoding_irigb(gpstime, graceid, eventdir) and
-                     try_plotting_duotone_delay(gpstime, eventdir) and
-                     try_making_overlay_plots(gpstime, eventdir) )
-        except NDS2AvailabilityException:
-            time.sleep(SLEEP_TIME)
-    # try making the LATEX and PDF files
-    make_pdf_files(graceid, str(gpstime), eventdir)
+
+    # define the file generators and start them.
+    print("Defining file generators and starting them up...")
+    file_generators = start_as_data_becomes_available(
+        [
+            FileGenerator(
+                desc = "IRIG-B decode checks and plots",
+                file_globs = GLOBS_FOR_IRIGB,
+                commands = [
+                    ['irig-b-decode-commands.py', '-t', str(gpstime),
+                    '-g', graceid]
+                ],
+                execpath = GECO_DATA_DIR,
+                min_delay = SEC_BEFORE_IRIG,
+                gpstime = gpstime,
+                graceid = graceid
+            ),
+            FileGenerator(
+                desc = "DuoTone Delay Plots",
+                file_globs = GLOBS_FOR_DTONE,
+                commands = [
+                    ['duotone_delay.py', '--stat', '--ifo', 'H1',
+                    '-t', str(gpstime)],
+                    ['duotone_delay.py', '--stat', '--ifo', 'L1',
+                    '-t', str(gpstime)]
+                ],
+                execpath = GECO_DATA_DIR,
+                min_delay = SEC_BEFORE_DTONE,
+                gpstime = gpstime,
+                graceid = graceid
+            ),
+            FileGenerator(
+                desc = "DuoTone/IRIG-B Overlay Plots",
+                file_globs = GLOBS_FOR_OVERLAY,
+                commands = [
+                    ['geco_overlay_plots.py', '-t', str(gpstime)]
+                ],
+                execpath = GECO_DATA_DIR,
+                min_delay = SEC_BEFORE_OVERLAY,
+                gpstime = gpstime,
+                graceid = graceid
+            ),
+            FileGenerator(
+                desc = "Timing Witness PDF document",
+                file_globs = GLOBS_FOR_PDF,
+                commands = [
+                    ['timing_witness_paper.py', graceid, gpstime, '.']
+                ],
+                execpath = GECO_DATA_DIR,
+                muteout = True,
+                muteerr = True,
+                gpstime = gpstime,
+                graceid = graceid
+            )
+        ],
+        debug = debug
+    )
+
+    # wait for everything to finish. since we are waiting for all processes
+    # to finish and since we don't need to free up any resources or anything
+    # like that, it suffices to just wait on them in order.
+    for fg in file_generators:
+        fg.wait()
+
 
 if __name__ == '__main__':
-    main(args.gpstime, args.graceid, args.debug)
+    main(
+        gpstime = args.gpstime,
+        graceid = args.graceid,
+        dccnum = args.dccnum,
+        eventdirpre = args.eventdir_prefix,
+        debug = args.debug
+    )
