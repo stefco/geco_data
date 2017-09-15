@@ -97,13 +97,13 @@ class IRIGBSecondStats(SecondStats):
     def stat_plots(self, start_time, end_time): pass
 
 class DuoToneSecondStats(SecondStats):
-    """Keep track of a second of DuoTone statistics. Note that this looks at the
-    start and end of each second, so if you reduce a bunch of contiguous
+    """Keep track of a second of DuoTone statistics. Note that this looks at
+    the start and end of each second, so if you reduce a bunch of contiguous
     seconds' stats, you have the end of the second before the first second and
     the start of the second after the final second included in your stats. This
-    could only possibly matter in edge cases, since DuoTone signals are expected
-    to be perfectly periodic, but in case you see weird behavior in the
-    zero-crossing plots, it's worth keeping this in mind as a possible
+    could only possibly matter in edge cases, since DuoTone signals are
+    expected to be perfectly periodic, but in case you see weird behavior in
+    the zero-crossing plots, it's worth keeping this in mind as a possible
     culprit."""
     def __init__(self, channel, timeseries=None, stats=None, n=None):
         """If timeseries is None, then we are manually initializing with custom
