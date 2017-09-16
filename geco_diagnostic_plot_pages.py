@@ -290,7 +290,7 @@ DEFAULT_CHANNELS=[
 ]
 CSS="""
 img, p {{
-    max-width: 400px;
+    max-width: 600px;
 }}
 div {{
     display: inline
