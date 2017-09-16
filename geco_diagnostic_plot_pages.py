@@ -288,6 +288,14 @@ DEFAULT_CHANNELS=[
     "H1:SYS-TIMING_Y_PPS_A_SIGNAL_6_DIFF",
     "H1:SYS-TIMING_Y_PPS_A_SIGNAL_7_DIFF"
 ]
+CSS="""
+img, p {{
+    max-width: 400px;
+}}
+div {{
+    display: inline
+}}
+"""
 
 
 # THE REST OF THE IMPORTS ARE AFTER THIS IF STATEMENT.
@@ -296,9 +304,15 @@ DEFAULT_CHANNELS=[
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
-    parser.add_argument("-t", "--gpstime", type=int,
-                        help=("The GPS time about which the plots should be "
-                              "centered."))
+    parser.add_argument(
+        "-t",
+        "--gpstimes",
+        type=int,
+        nargs='*',
+        help="""
+             The GPS times about which the plots should be centered.
+             """
+    )
     parser.add_argument(
         "-o",
         "--outdir",
@@ -392,13 +406,29 @@ import os
 def channel_fname(gps, chan):
     return '{}_{}.png'.format(gps, chan.replace(':', '..'))
 
-def image_link_html(gps, chan):
+def image_link_html(gpstimes, chan):
     """return an HTML string for an image element for this plot"""
-    return ('<div>\n'
-            '    <p>{}</p>\n'
-            '    <br>\n'
-            '    <img src="./{}">\n'
-            '</div>\n').format(chan, channel_fname(gps, chan))
+    headerfmt = "<th>{}</th>"
+    imgfmt = """
+    <td>
+        <img src="./{}">
+    </td>
+    """
+    header = '\n'.join([headerfmt.format(gps) for gps in gpstimes])
+    images = '\n'.join(
+        [imgfmt.format(channel_fname(gps, chan)) for gps in gpstimes]
+    )
+    channel_entry_fmt = """
+    <div>
+      <p>{}</p>
+      <br>
+      <table>
+        <tr>{}</tr>
+        <tr>{}</tr>
+      </table>
+    </div>
+    """
+    return channel_entry_fmt.format(chan, header, images)
 
 def read_channels(filedescriptor):
     return list(set(filedescriptor.read().split('\n')) - {''})
@@ -417,26 +447,22 @@ def get_channel_list():
         with open(args.channellist, 'r') as f:
             return read_channels(f)
 
-def make_preview_webpate(outdir, chans, gps):
+def make_preview_webpage(outdir, chans, gpstimes):
     """Make a webpage called index.html displaying all generated plots and save
     it to the specified output directory."""
-    HTML_TOP = """
+    gpstimes_str = ', '.join(str(gpstimes))
+    HTML_TOP = ("""
     <!DOCTYPE html>
     <html>
         <head>
             <meta charset="UTF-8">
             <title>Plots around {}</title>
             <style type="text/css">
-                img, p {{
-                    max-width: 400px;
-                }}
-                div {{
-                    display: inline
-                }}
+                """ + CSS.replace('\n', '\n' + 16*' ') + """
             </style>
         </head>
         <body>
-    """.replace('\n    ', '\n').format(gps) # replace will remove 1st indent
+    """).replace('\n    ', '\n').format(gpstimes_str) # replace will remove 1st indent
     HTML_BOTTOM = """
         </body>
     </html>
@@ -446,7 +472,7 @@ def make_preview_webpate(outdir, chans, gps):
         f.write(HTML_TOP)
         f.write('\n')
         for chan in chans:
-            f.write(image_link_html(gps, chan))
+            f.write(image_link_html(gpstimes, chan))
         f.write(HTML_BOTTOM)
 
 def make_channel_plots(outdir, chans, gps, dt=DT, verbose=False,
@@ -484,8 +510,9 @@ if __name__ == '__main__':
     if args.verbose: print('channels to plot: {}'.format(chans))
 
     if not args.skipwebpage:
-        make_preview_webpate(args.outdir, chans, args.gpstime)
+        make_preview_webpage(args.outdir, chans, args.gpstimes)
 
     if not args.skipplots:
-        make_channel_plots(args.outdir, chans, args.gpstime, args.deltat,
-                           args.verbose, args.maxsimultaneous)
+        for gps in args.gpstimes:
+            make_channel_plots(args.outdir, chans, gps, args.deltat,
+                               args.verbose, args.maxsimultaneous)
