@@ -1,6 +1,6 @@
 {
   "start": "Mon Oct 31 16:00:00 2016",
-  "end": "Thu Jul 13 00:00:00 2017",
+  "end": "Fri Aug 25 22:00:00 2017",
   "exts": ["hdf5"],
   "max_chunk_length": 86400,
   "channels": [
@@ -44,7 +44,7 @@
           "handle_unrecorded_values": "ignore",
           "detrend": "linear",
           "#omitted_indices_comment": "All valid times, look like unrecorded.",
-          "omitted_indices": [41, 80, 112, 264, 375, 394],
+          "omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
           "ylim_top": 80,
           "ylim_bottom": -80
         },
@@ -85,9 +85,9 @@
           "handle_missing_values": "hide",
           "ylim_top": 90,
           "ylim_bottom": -90,
-          "omitted_indices": [211, 247, 618, 625, 626, 627, 628, 629, 643,
-                              644, 645, 646, 648, 651, 652, 655, 656,
-                              657, 658, 659, 660, 661, 663, 700, 790]
+          "omitted_indices": [211, 247, 618, 625, 626, 627, 628, 629, 643, 644,
+                              645, 646, 648, 651, 652, 655, 656, 657, 658, 659,
+                              660, 661, 663, 700, 790, 923]
         },
         "dq_flag": "L1:DMT-ANALYSIS_READY:1",
         "channel": "L1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_2"
@@ -99,7 +99,8 @@
           "omitted_indices": [ 0,  1,  2,   3,   4,  5,  6,  7,  8,  9, 10, 11,
                               12, 13, 14,  15,  16, 17, 18, 19, 20, 21, 22, 23,
                               24, 25, 26,  27,  28, 29, 30, 31, 32, 33, 34, 35,
-                              36, 37, 38, 211, 247, 618, 628, 629, 700, 790],
+                              36, 37, 38, 211, 247, 618, 628, 629, 700, 790,
+                              923],
           "ylim_top": 90,
           "ylim_bottom": -90,
           "xlim_left": 15
@@ -112,7 +113,7 @@
           "detrend": "none",
           "handle_missing_values": "hide",
           "handle_unrecorded_values": "hide",
-          "omitted_indices": [211, 247, 569, 588, 618, 700, 790],
+          "omitted_indices": [211, 247, 569, 588, 618, 700, 790, 923],
           "outliers_lower_bound": -1e-5,
           "outliers_upper_bound":  1e-5,
           "fname_desc": "original-data"
@@ -125,7 +126,7 @@
           "detrend": "linear",
           "handle_missing_values": "hide",
           "handle_unrecorded_values": "hide",
-          "omitted_indices": [211, 247, 569, 588, 618, 700, 790],
+          "omitted_indices": [211, 247, 569, 588, 618, 700, 790, 923],
           "outliers_lower_bound": -1e-5,
           "outliers_upper_bound":  1e-5,
           "ylim_top": 220,
@@ -138,7 +139,7 @@
         "plot_properties": {
           "detrend": "mean",
           "handle_missing_values": "hide",
-          "omitted_indices": [211, 247, 618, 700, 790],
+          "omitted_indices": [211, 247, 618, 700, 790, 923],
           "#ylim_top": 500,
           "#ylim_bottom": -500
         },
