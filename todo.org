@@ -1,0 +1,65 @@
+#+TODO: TODO(t) DOING(i) TEST(c) | DONE(d)
+
+* In Progress
+
+** TODO Fix incorrect Cesium plot
+
+   Used the wrong channel: ~H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2~
+   is incorrect for LHO Cesium; use
+   ~H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1~ instead.
+
+#+NAME: Keita slow channel plot comment
+#+BEGIN_SRC
+...
+you are analyzing H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2, which
+is NTP comparator channel and not the atomic clock. That's why your offset
+as well as linear drift is very small. Real atomic clock comparison should
+look like the LLO data.
+
+The correct channel to analyze is
+H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1.
+...
+A minor point related to the above is that the diagnostic channel plots like
+https://dcc.ligo.org/DocDB/0145/T1700441/001/G297595-
+diagnostic-channel-plot-comparison.pdf
+should include corner station comparator A channels like
+L1:SYS-TIMING_C_PPS_A_SIGNAL_1_DIFF both for LLO and LHO. Corner station
+comparator B channels are not connected to anything.
+...
+#+END_SRC
+
+*** DONE Plan
+    CLOSED: [2017-10-03 Tue 13:56]
+    :LOGBOOK:
+    CLOCK: [2017-10-03 Tue 12:41]--[2017-10-03 Tue 13:55] =>  1:14
+    :END:
+
+*** TODO Update jobspec
+    :LOGBOOK:
+    CLOCK: [2017-10-03 Tue 13:56]
+    :END:
+
+**** TODO Change in channels
+**** TODO Change in channel descriptions
+**** TODO Change in plots
+**** TODO Reset plot properties to blank
+**** TODO Update git repo
+
+
+*** TODO Start download on ligodl
+
+    Start downloading the missing channel on my data download server.
+
+*** TODO Copy output files to ldas-pcdev2
+*** TODO Generate plots
+*** TODO Diagnose faults
+*** TODO Update Cesium document
+
+**** TODO Describe faults
+**** TODO Update conclusion
+**** TODO Update plots in Cesium document
+
+*** TODO Send updated file to Zsuzsa
+*** TODO Re-upload to DCC
+  
+* Done

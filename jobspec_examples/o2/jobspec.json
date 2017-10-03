@@ -4,7 +4,7 @@
   "exts": ["hdf5"],
   "max_chunk_length": 86400,
   "channels": [
-    "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2",
+    "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
     "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3",
     "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
     "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3",
@@ -29,7 +29,7 @@
     "height": 10.0,
     "width": 7.5,
     "channel_descriptions": {
-      "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2": "LHO Cs-III Cesium Clock",
+      "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1": "LHO Cs-III Cesium Clock",
       "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_3": "LHO NTP Server",
       "H1:SYS-TIMING_X_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, X End Station",
       "H1:SYS-TIMING_Y_FO_A_PORT_9_SLAVE_CFC_TIMEDIFF_3": "LHO CNS II GPS Clock, Y End Station",
@@ -41,15 +41,15 @@
     "plots": [
       {
         "plot_properties": {
-          "handle_unrecorded_values": "ignore",
-          "detrend": "linear",
+          "#handle_unrecorded_values": "ignore",
+          "#detrend": "linear",
           "#omitted_indices_comment": "All valid times, look like unrecorded.",
-          "omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
-          "ylim_top": 80,
-          "ylim_bottom": -80
+          "#omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
+          "#ylim_top": 80,
+          "#ylim_bottom": -80
         },
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
-        "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2"
+        "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
       },
       {
         "plot_properties": {
