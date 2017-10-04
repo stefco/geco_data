@@ -137,7 +137,24 @@ comparator B channels are not connected to anything.
 **** DONE Mention in docs that multiple flags are not officially supported
      CLOSED: [2017-10-04 Wed 16:24]
 
-*** TODO Copy output files to ldas-pcdev2
+*** DONE Resolve symlinks before archiving
+    CLOSED: [2017-10-04 Wed 17:08]
+
+    Do this using ~os.path.realpath~ for all cases.
+
+**** DONE Resolve symlinks for output files
+     CLOSED: [2017-10-04 Wed 17:07]
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 16:48]--[2017-10-04 Wed 17:07] =>  0:19
+     :END:
+**** DONE Resolve symlinks for jobspec file
+     CLOSED: [2017-10-04 Wed 17:07]
+
+*** STARTED Copy output files to ldas-pcdev2
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 17:08]
+    CLOCK: [2017-10-04 Wed 16:35]--[2017-10-04 Wed 16:48] =>  0:13
+    :END:
 *** TODO Generate plots
 *** TODO Diagnose faults
 *** TODO Update Cesium document
