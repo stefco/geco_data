@@ -7,7 +7,7 @@ olddir=old-plots-`date +%s`
 mkdir ~/public_html/slow-channels/${olddir}
 DATE=`date`
 
-for jobdir in ~/slow-channel-scratch/o2_done; do
+for jobdir in ~/slow-channel-scratch/o2_fixed; do
     echo "on jobdir ${jobdir}"
     # get git revision and date
     pushd ~/dev/geco_data
