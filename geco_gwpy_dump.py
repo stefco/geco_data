@@ -777,7 +777,9 @@ class Job(object):
             raise IOError( 'GWpy dump job has missing output files. Aborting.')
         with tarfile.open(self.output_archive_filename, "w:gz") as archive:
             for output_file in self.output_filenames:
-                archive.add(output_file)
+                # resolve symlinks
+                realpath = os.path.realpath(output_file)
+                archive.add(realpath, arcname=output_file)
             if self.filename is None:
                 with tempfile.NamedTemporaryFile(delete=False) as temp:
                     pass
@@ -785,7 +787,8 @@ class Job(object):
                 archive.add(temp.name, arcname='jobspec.json')
                 temp.unlink(temp.name)
             else:
-                archive.add(self.filename, arcname='jobspec.json')
+                archive.add(os.path.realpath(self.filename),
+                            arcname='jobspec.json')
     def output_unarchive(self, archive_filename=None):
         """Unarchive the output files for this job. Looks for an archive file
         whose name is uniquely based on the output files of this job and
