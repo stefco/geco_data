@@ -40,6 +40,20 @@ List final output filenames and whether they exist or not:
 
     geco_gwpy_dump -o
 
+Archive the output files to a single archive (fails if dump not finished)
+
+    geco_gwpy_dump -a
+
+Unarchive the output files from an existing archive file (fails if archive is
+missing or if any expected output files are not in the archive)
+
+    geco_gwpy_dump -u
+
+Print the filename of the archive for this jobspec and quit (works whether the
+archive file exists or not, since this filename is based purely on the jobspec)
+
+    geco_gwpy_dump -f
+
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
 pairs. The "start" and "end" values must merely be readable by
@@ -123,6 +137,15 @@ if __name__ == '__main__':
     if '-o' in sys.argv:
         sys.argv.remove('-o')
         list_outfiles = True
+    if '-a' in sys.argv:
+        sys.argv.remove('-a')
+        archive_outfiles = True
+    if '-u' in sys.argv:
+        sys.argv.remove('-u')
+        unarchive_outfiles = True
+    if '-f' in sys.argv:
+        sys.argv.remove('-f')
+        print_archive_filename = True
 # slow import; only import if we are going to use it.
 if not (__name__ == '__main__'
         and (check_progress or list_outfiles)):
@@ -132,6 +155,8 @@ import gwpy.time
 import numpy as np
 import json
 import functools
+import hashlib
+import tarfile
 import multiprocessing
 import math
 import os
@@ -435,7 +460,7 @@ class Job(object):
         if not len(exts) == 1:
             raise ValueError(('For now, can only specify a single file '
                               'extension for downloaded data; instead, got: '
-                              '{}').format(ext))
+                              '{}').format(exts))
         if not max_chunk_length % 60 == 0:
             raise ValueError(('max_chunk_length must be a multiple of 60; got'
                               '{} instead.').format(max_chunk_length))
@@ -600,7 +625,7 @@ class Job(object):
                         query = queries[starting_index]
                         data = query.read().copy()
                         data_initialized = True
-                    except NDS2Exception as e:
+                    except NDS2Exception:
                         starting_index += 1
                 for query in queries[starting_index + 1:]:
                     try:
@@ -656,6 +681,9 @@ class Job(object):
         print(summary_fmt.format(_GREEN, _CLEAR, successful_percentage,
                                  failed_percentage, in_progress_percentage))
     def list_outfiles(self):
+        """List output filenames (i.e. the files that should be produced once
+        all data in the jobspec are downloaded and concatenated) and whether
+        they exist or not in a human-readable format."""
         does_exist = '[{} EXISTS {}] '.format(_GREEN, _CLEAR)
         does_not_exist = '[{} MISSING {}]'.format(_RED, _CLEAR)
         for f in self.output_filenames:
@@ -664,6 +692,39 @@ class Job(object):
             else:
                 exists = does_not_exist
             print('{} -> {}'.format(exists, f))
+    def output_filenames_sha(self):
+        """Get the sha256 sum of the output filenames. Used for handily
+        labeling collections of output files for this jobspec."""
+        return hashlib.sha256('\n'.join(self.output_filenames)).hexdigest()
+    def output_archive_filename(self):
+        """Get a filename for a .tar.gz archive that the output of this jobspec
+        will be stored in. This is based on the output filenames via a hash
+        sum and should therefore with high probability be unique for a given
+        jobspec."""
+        return "jobarchive_{}.tar.gz".format(self.output_filenames_sha)
+    def output_archive(self):
+        """Archive output files into a single file whose name is uniquely based
+        on the contents of the jobspec for easy transport and later retrieval.
+        Will fail if any of the job's output files are missing.
+        """
+        if not all([os.path.isfile(f) for f in self.output_filenames]):
+            raise IOError( 'GWpy dump job has missing output files. Aborting.')
+        with tarfile.open(self.output_archive_filename, "w:gz") as archive:
+            for output_file in self.output_filenames:
+                archive.add(output_file)
+    def output_unarchive(self):
+        """Unarchive the output files for this job. Looks for an archive file
+        whose name is uniquely based on the output files of this job and
+        extracts the dumped output files from it to the current directory for
+        immediate use. Will fail if the file does not exist or if one of the
+        expected output file names is not available within the archive. Will
+        also fail if the output file already exists in order to prevent
+        accidental data deletion and potential subsequent subtle errors."""
+        with tarfile.open(self.output_archive_filename, "r:gz") as archive:
+            for output_file in self.output_filenames:
+                if os.path.isfile(output_file):
+                    raise IOError('GWpy dump output file exists, aborting.')
+                archive.extract(output_file)
     @property
     def segment_filename(self):
         """The filename of HDF5 file that holds the segments specified in this
@@ -761,7 +822,14 @@ if __name__ == '__main__':
         job.current_progress()
     if list_outfiles:
         job.list_outfiles()
-    if check_progress or list_outfiles:
+    if archive_outfiles:
+        job.output_archive()
+    if unarchive_outfiles:
+        job.output_unarchive()
+    if print_archive_filename:
+        print(job.output_archive_filename)
+    if (check_progress or list_outfiles or archive_outfiles or
+            unarchive_outfiles or print_archive_filename):
         exit(0)
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))

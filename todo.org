@@ -1,6 +1,11 @@
-#+TODO: TODO(t) DOING(i) TEST(c) | DONE(d)
+#+TODO: TODO(t) STARTED(s) TESTING(c) | DONE(d)
 
 * In Progress
+
+** Break
+   :LOGBOOK:
+   CLOCK: [2017-10-04 Wed 10:29]--[2017-10-04 Wed 10:47] =>  0:18
+   :END:
 
 ** TODO Fix incorrect Cesium plot
 
@@ -34,21 +39,76 @@ comparator B channels are not connected to anything.
     CLOCK: [2017-10-03 Tue 12:41]--[2017-10-03 Tue 13:55] =>  1:14
     :END:
 
-*** TODO Update jobspec
+*** DONE Update jobspec
+    CLOSED: [2017-10-03 Tue 13:59]
     :LOGBOOK:
-    CLOCK: [2017-10-03 Tue 13:56]
+    CLOCK: [2017-10-03 Tue 13:56]--[2017-10-03 Tue 13:59] =>  0:03
     :END:
 
-**** TODO Change in channels
-**** TODO Change in channel descriptions
-**** TODO Change in plots
-**** TODO Reset plot properties to blank
-**** TODO Update git repo
+**** DONE Change in channels
+     CLOSED: [2017-10-03 Tue 13:58]
+**** DONE Change in channel descriptions
+     CLOSED: [2017-10-03 Tue 13:58]
+**** DONE Change in plots
+     CLOSED: [2017-10-03 Tue 13:58]
+**** DONE Reset plot properties to blank
+     CLOSED: [2017-10-03 Tue 13:58]
+**** DONE Update git repo
+     CLOSED: [2017-10-03 Tue 13:59]
 
-
-*** TODO Start download on ligodl
+*** DONE Start download on ligodl
+    CLOSED: [2017-10-03 Tue 14:09]
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 09:53]--[2017-10-04 Wed 09:53] =>  0:00
+    CLOCK: [2017-10-03 Tue 13:59]--[2017-10-03 Tue 14:09] =>  0:10
+    :END:
 
     Start downloading the missing channel on my data download server.
+
+    Finished, less than 24 hours for a single channel.
+
+*** TESTING Add utils for easily moving output files around
+
+**** DONE Plan
+     CLOSED: [2017-10-04 Wed 09:57]
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 09:57]--[2017-10-04 Wed 09:57] =>  0:00
+     :END:
+**** TESTING Add function for getting sha256 sum of out filenames
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 09:57]--[2017-10-04 Wed 10:02] =>  0:05
+     :END:
+     [[https://stackoverflow.com/questions/26538588/how-to-sha256-hash-a-variable-in-python][Explanation here.]]
+**** TESTING Add function for getting archive filename
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 10:02]--[2017-10-04 Wed 10:05] =>  0:03
+     :END:
+**** TESTING Add function for archiving
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 10:05]--[2017-10-04 Wed 10:15] =>  0:10
+     :END:
+     [[https://stackoverflow.com/questions/3874837/how-do-i-compress-a-folder-with-the-python-gzip-module][Explanation here.]]
+**** TESTING Add function for unarchiving
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 10:15]--[2017-10-04 Wed 10:26] =>  0:11
+     :END:
+     [[https://stackoverflow.com/questions/30887979/i-want-to-create-a-script-for-unzip-tar-gz-file-via-python][Explanation here.]]
+**** TESTING Add flags
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 10:47]--[2017-10-04 Wed 10:55] =>  0:08
+     :END:
+***** TESTING Add -a option for archiving
+***** TESTING Add -u option for unarchiving
+***** TESTING Add -f option to print archive filename
+**** TESTING Update help string with new flags
+     :LOGBOOK:
+     CLOCK: [2017-10-04 Wed 10:55]--[2017-10-04 Wed 10:59] =>  0:04
+     :END:
+
+*** TODO Add a copy of the jobspec file to the archive
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 11:00]--[2017-10-04 Wed 11:00] =>  0:00
+    :END:
 
 *** TODO Copy output files to ldas-pcdev2
 *** TODO Generate plots
