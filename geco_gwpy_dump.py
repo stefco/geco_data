@@ -128,6 +128,9 @@ import sys
 if __name__ == '__main__':
     check_progress = False
     list_outfiles = False
+    archive_outfiles = False
+    unarchive_outfiles = False
+    print_archive_filename = False
     if len(sys.argv) != 1 and sys.argv[1] in ['-h', '--help']:
         print(USAGE)
         exit()
