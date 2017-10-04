@@ -830,7 +830,7 @@ if __name__ == '__main__':
     if unarchive_outfiles:
         job.output_unarchive()
     if print_archive_filename:
-        print(job.output_archive_filename)
+        print(job.output_archive_filename())
     if (check_progress or list_outfiles or archive_outfiles or
             unarchive_outfiles or print_archive_filename):
         exit(0)
