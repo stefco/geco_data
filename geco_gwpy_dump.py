@@ -26,7 +26,7 @@ INDEX_MISSING_FMT = ('{} index not found for segment {} of {}, time {}\n'
 USAGE="""
 Save channel data in a sane, interruptible, parallelizable way.
 
-Usage:
+Usage (note that multiple option flags are NOT supported):
 
 Start downloading data specified in jobspec.json:
 
@@ -39,6 +39,40 @@ Check incremental progress of download:
 List final output filenames and whether they exist or not:
 
     geco_gwpy_dump -o
+
+Archive the output files to a single archive (fails if dump not finished):
+
+    geco_gwpy_dump -a
+
+Unarchive the output files from an existing archive file (fails if archive is
+missing or if any expected output files are not in the archive):
+
+    geco_gwpy_dump -u
+
+Unarchive the the jobspec contained in "archive.tar.gz" and safely extract the
+output files corresponding to that jobspec from the same archive, running
+multiple consistency checks along the way (note: you can skip specifying the
+archive filename as long as there is exactly one file in the current directory
+with a .tar.gz extension; in this case, that file is assumed to be the correct
+archive). Will fail if any of the archived files already exist (including the
+jobspec, which will always be called jobspec.json). Will also fail if the
+archive filename does not correspond to the canonical output filename (if you
+are using custom filenames, you should probably use the ``-X`` option below):
+
+    geco_gwpy_dump -x archive.tar.gz
+
+Like ``-x``, extract the jobspec and output files from the given tarfile, but
+don't bother checking the archive filename for consistency with the jobspec
+output canonical archive filename. Use this if you have given custom
+descriptive names to your archive files.
+
+    geco_gwpy_dump -X archive.tar.gz
+
+Print the filename of the archive for this jobspec and quit (works whether the
+archive file exists or not, since this filename is based purely on the
+jobspec):
+
+    geco_gwpy_dump -f
 
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
@@ -114,15 +148,36 @@ import sys
 if __name__ == '__main__':
     check_progress = False
     list_outfiles = False
+    archive_outfiles = False
+    unarchive_outfiles = False
+    unarchive_job = False
+    print_archive_filename = False
+    check_archive_filename = True
     if len(sys.argv) != 1 and sys.argv[1] in ['-h', '--help']:
         print(USAGE)
         exit()
+    if '-X' in sys.argv:
+        check_archive_filename = False
+        x_opt_ind = sys.argv.index('-X')
+        sys.argv[x_opt_ind] = '-x'
+    if '-x' in sys.argv:
+        sys.argv.remove('-x')
+        unarchive_job = True
     if '-p' in sys.argv:
         sys.argv.remove('-p')
         check_progress = True
     if '-o' in sys.argv:
         sys.argv.remove('-o')
         list_outfiles = True
+    if '-a' in sys.argv:
+        sys.argv.remove('-a')
+        archive_outfiles = True
+    if '-u' in sys.argv:
+        sys.argv.remove('-u')
+        unarchive_outfiles = True
+    if '-f' in sys.argv:
+        sys.argv.remove('-f')
+        print_archive_filename = True
 # slow import; only import if we are going to use it.
 if not (__name__ == '__main__'
         and (check_progress or list_outfiles)):
@@ -132,6 +187,10 @@ import gwpy.time
 import numpy as np
 import json
 import functools
+import hashlib
+import tarfile
+import tempfile
+import glob
 import multiprocessing
 import math
 import os
@@ -425,7 +484,7 @@ class Job(object):
     and filling in missing values."""
     def __init__(self, start, end, channels, exts=DEFAULT_EXTENSION,
                  dq_flags=DEFAULT_FLAGS, trends=DEFAULT_TRENDS,
-                 max_chunk_length=DEFAULT_MAX_CHUNK):
+                 max_chunk_length=DEFAULT_MAX_CHUNK, filename=None):
         """Start and end times can be specified as either integer GPS times or
         as human-readable time strings that are parsable by gwpy.time.to_gps.
         max_chunk_length is measured in seconds and must be a multiple of 60."""
@@ -435,7 +494,7 @@ class Job(object):
         if not len(exts) == 1:
             raise ValueError(('For now, can only specify a single file '
                               'extension for downloaded data; instead, got: '
-                              '{}').format(ext))
+                              '{}').format(exts))
         if not max_chunk_length % 60 == 0:
             raise ValueError(('max_chunk_length must be a multiple of 60; got'
                               '{} instead.').format(max_chunk_length))
@@ -446,6 +505,7 @@ class Job(object):
         self.trends             = [ str(t) for t in trends ]
         self.dq_flags           = dq_flags
         self.max_chunk_length   = max_chunk_length
+        self.filename           = filename
         # if minute-trends are being downloaded, expand the interval so
         # that start and end times are divisible by 60.
         if any(['m-trend' in c for c in self.channels_with_trends]):
@@ -457,7 +517,8 @@ class Job(object):
     @classmethod
     def from_dict(cls, d):
         """Instantiate a Job from a dictionary. Optional keyword arguments
-        do not need to be present in the dictionary."""
+        do not need to be present in the dictionary. Filename information is
+        not included."""
         # there are some optional parameters that we will only pass to the
         # __init__ method if they are included in the JSON.
         kwargs = {}
@@ -474,9 +535,12 @@ class Job(object):
         """load this job from a job specification file, assumed to be formatted
         in JSON."""
         with open(jobspecfile, "r") as f:
-            return cls.from_dict(json.load(f))
+            job = cls.from_dict(json.load(f))
+            job.filename = jobspecfile
+            return job
     def to_dict(self):
-        """Return a dict representing this job."""
+        """Return a dict representing this job. Filename information is not
+        included."""
         return { 'start':               self.start,
                  'end':                 self.end,
                  'channels':            self.channels,
@@ -485,9 +549,26 @@ class Job(object):
                  'trends':              self.trends,
                  'max_chunk_length':    self.max_chunk_length }
     def save(self, jobspecfile):
-        """Write this job specification to a JSON file."""
+        """Write this job specification to a JSON file named
+        ``jobspecfile``."""
         with open(jobspecfile, 'w') as f:
-            json.dump(self.to_dict(), f)
+            json.dump(self.to_dict(), f, sort_keys=True, indent=2)
+    def overwrite(self):
+        """Write this job specification to the same JSON file that it was
+        loaded from (or whatever the current value of the job's ``filename``
+        property is). Will fail if no ``filename`` property is present for the
+        job.
+        
+        WARNING: no backup will be made and no confirmation will be requested
+        before overwriting the old file.
+        """
+        self.save(self.filename)
+    @property
+    def job_sha(self):
+        """Get the sha256 checksum of this job (as represented in its canonical
+        JSON format with sorted keys and no indentation)."""
+        return hashlib.sha256(json.dumps(self.to_dict(),
+                                         sort_keys=True)).hexdigest()
     @property
     def duration(self):
         """Get the duration of this job in seconds."""
@@ -600,7 +681,7 @@ class Job(object):
                         query = queries[starting_index]
                         data = query.read().copy()
                         data_initialized = True
-                    except NDS2Exception as e:
+                    except NDS2Exception:
                         starting_index += 1
                 for query in queries[starting_index + 1:]:
                     try:
@@ -656,6 +737,9 @@ class Job(object):
         print(summary_fmt.format(_GREEN, _CLEAR, successful_percentage,
                                  failed_percentage, in_progress_percentage))
     def list_outfiles(self):
+        """List output filenames (i.e. the files that should be produced once
+        all data in the jobspec are downloaded and concatenated) and whether
+        they exist or not in a human-readable format."""
         does_exist = '[{} EXISTS {}] '.format(_GREEN, _CLEAR)
         does_not_exist = '[{} MISSING {}]'.format(_RED, _CLEAR)
         for f in self.output_filenames:
@@ -664,6 +748,89 @@ class Job(object):
             else:
                 exists = does_not_exist
             print('{} -> {}'.format(exists, f))
+    @property
+    def output_filenames_sha(self):
+        """Get the sha256 sum of the output filenames. Used for handily
+        labeling collections of output files for this jobspec."""
+        return hashlib.sha256('\n'.join(self.output_filenames)).hexdigest()
+    @property
+    def output_archive_filename(self):
+        """Get a filename for a .tar.gz archive that the output of this jobspec
+        will be stored in. This is based on the output filenames via a hash
+        sum and should therefore with high probability be unique for a given
+        jobspec."""
+        return "jobarchive_{}.tar.gz".format(self.output_filenames_sha)
+    def output_archive(self):
+        """Archive output files into a single file whose name is uniquely based
+        on the contents of the jobspec for easy transport and later retrieval.
+        Also archive the job specification in use as a JSON file in the archive
+        named "jobspec.json" (irrespective of the jobspec filename that the
+        jobspec was loaded from).
+        
+        If the jobspec was loaded from a file, this
+        file is copied verbatim to the archive. If this jobspec has no
+        corresponding file, then it will be dumped to a temporary file that
+        will be copied to the archive.
+        
+        Will fail if any of the job's output files are missing."""
+        if not all([os.path.isfile(f) for f in self.output_filenames]):
+            raise IOError( 'GWpy dump job has missing output files. Aborting.')
+        with tarfile.open(self.output_archive_filename, "w:gz") as archive:
+            for output_file in self.output_filenames:
+                # resolve symlinks
+                realpath = os.path.realpath(output_file)
+                archive.add(realpath, arcname=output_file)
+            if self.filename is None:
+                with tempfile.NamedTemporaryFile(delete=False) as temp:
+                    pass
+                self.save(temp.name)
+                archive.add(temp.name, arcname='jobspec.json')
+                temp.unlink(temp.name)
+            else:
+                archive.add(os.path.realpath(self.filename),
+                            arcname='jobspec.json')
+    def output_unarchive(self, archive_filename=None):
+        """Unarchive the output files for this job. Looks for an archive file
+        whose name is uniquely based on the output files of this job and
+        extracts the dumped output files from it to the current directory for
+        immediate use. You can specify a custom archive filename if you know
+        that the archived does not have the canonical filename.
+        
+        Will fail if the file does not exist or if one of the expected output
+        file names is not available within the archive.  Will also fail if the
+        output file already exists in order to prevent accidental data deletion
+        and potential subsequent subtle errors."""
+        if archive_filename is None:
+            archive_filename = self.output_archive_filename
+        with tarfile.open(archive_filename, "r:gz") as archive:
+            for output_file in self.output_filenames:
+                if os.path.exists(output_file):
+                    raise IOError('GWpy dump output file exists, aborting.')
+                archive.extract(output_file)
+    @classmethod
+    def job_unarchive(cls, archive_filename, check_archive_filename=True):
+        """Unarchive a jobspec file as well as its entire collection of output
+        files from an output file archive. The jobspec will be parsed and
+        loaded as part of the process, ensuring that it is a valid jobspec, and
+        its contents will be used to finish unarchiving its output files,
+        ensuring that they are consistent with the jobspec. The jobspec will be
+        extracted as "jobspec.json" with no regard to the filename it was given
+        when saved; it will not overwrite an existing file with the same name.
+        
+        Will fail if:
+        
+        - a file already exists with the name jobspec.json
+        - the jobspec is invalid
+        - any of the output filenames are incorrectly named or missing in the
+          archive"""
+        if os.path.exists('jobspec.json'):
+            raise IOError('jobspec.json exists, aborting job unarchiving.')
+        with tarfile.open(archive_filename, "r:gz") as archive:
+            archive.extract('jobspec.json')
+        job = cls.load('jobspec.json')
+        if check_archive_filename:
+            archive_filename = job.output_archive_filename
+        job.output_unarchive(archive_filename)
     @property
     def segment_filename(self):
         """The filename of HDF5 file that holds the segments specified in this
@@ -744,6 +911,25 @@ def sanitize_for_filename(string):
     return string.replace(':', '..').replace(',', '--')
 
 if __name__ == '__main__':
+    # if we are unarchiving an entire job and it's output, then there is no
+    # jobspec file already in existence; we need to extract it from the jobspec
+    # file, which is provided as the first arg after ``-x``, or which is
+    # implicitly the only *.tar.gz file in the directory.
+    if unarchive_job:
+        if len(sys.argv) == 1:
+            tarfiles = glob.glob('*.tar.gz')
+            if len(tarfiles) != 1:
+                raise ValueError(('Must be exactly 1 .tar.gz file in '
+                                  'directory; otherwise, specify manually.'))
+            archive_filename = tarfiles[0]
+        elif len(sys.argv) == 2:
+            archive_filename = sys.argv[1]
+        else:
+            raise ValueError(('Must specify exactly on archive filename or '
+                              'have exactly 1 .tar.gz file in directory.'))
+        Job.job_unarchive(archive_filename, check_archive_filename)
+        print('Job unarchived successfully!')
+        exit(0)
     # specify the job specification file to load
     if len(sys.argv) == 1:
         jobspecfile = 'jobspec.json'
@@ -761,7 +947,16 @@ if __name__ == '__main__':
         job.current_progress()
     if list_outfiles:
         job.list_outfiles()
-    if check_progress or list_outfiles:
+    if archive_outfiles:
+        job.output_archive()
+        print('Done, archived filename:')
+        print(job.output_archive_filename)
+    if unarchive_outfiles:
+        job.output_unarchive()
+    if print_archive_filename:
+        print(job.output_archive_filename)
+    if (check_progress or list_outfiles or archive_outfiles or
+            unarchive_outfiles or print_archive_filename):
         exit(0)
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))

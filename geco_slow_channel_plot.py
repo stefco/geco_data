@@ -32,6 +32,7 @@ DEFAULT_PLOT_PROPERTIES = {
     "missing_zorder": 101,
     "unrecorded_zorder": 100,
     "outliers_zorder": -1,
+    "start_end_zorder": 200,
     "omitted_label": "Omitted Values",
     "missing_label": "Data Not Found",
     "unrecorded_label": "Data Not Taken",
@@ -60,6 +61,9 @@ PLOT_PROPERTY_DESCRIPTIONS = {
     "missing_zorder": "Higher numbers plot this marker over other markers.",
     "unrecorded_zorder": "Higher numbers plot this marker over other markers.",
     "outliers_zorder": "Higher numbers plot this marker over other markers.",
+    "start_end_zorder": ("The z-order of data quality segment start/end "
+                         "markers. Higher numbers plot this marker over other "
+                         "markers."),
     "unrecorded_label": ("If ``handle_unrecorded_values`` is set to 'mark`, "
                          "mark unrecorded values on the final plot and "
                          "label them in the legend using this string."),
@@ -1534,13 +1538,14 @@ class BadTimesZoomPlotter(FullDataPlotter):
         unitfactor = SEC_PER[self.t_units]
         dq_start = (self.dq_segment.start.gpsSeconds - self.start) / unitfactor
         dq_end = (self.dq_segment.end.gpsSeconds - self.start) / unitfactor
+        zorder = self.plot_properties['start_end_zorder']
         if self.t_lim[0] <= dq_start:
             deep_pink = '#FF1493'
-            plot_vertical_marker(ax, [dq_start], zorder=200,
+            plot_vertical_marker(ax, [dq_start], zorder=zorder,
                                  label="Start of Segment", color=deep_pink)
         if dq_end <= self.t_lim[1]:
             midnight_blue = '#191970'
-            plot_vertical_marker(ax, [dq_end], zorder=200,
+            plot_vertical_marker(ax, [dq_end], zorder=zorder,
                                  label="End of Segment", color=midnight_blue)
     @property
     def t_label(self):
