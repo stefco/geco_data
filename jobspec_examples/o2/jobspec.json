@@ -48,8 +48,9 @@
           "#detrend": "linear",
           "#omitted_indices_comment": "All valid times, look like unrecorded.",
           "#omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
-          "#ylim_top": 80,
-          "#ylim_bottom": -80
+          "omitted_indices": [218],
+          "ylim_top": 170,
+          "ylim_bottom": -130
         },
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
@@ -64,6 +65,7 @@
           "#detrend": "linear",
           "#omitted_indices_comment": "All valid times, look like unrecorded.",
           "#omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
+          "omitted_indices": [218],
           "#ylim_top": 80,
           "#ylim_bottom": -80
         },
