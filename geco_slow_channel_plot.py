@@ -1620,7 +1620,7 @@ class BadTimesZoomPlotter(FullDataPlotter):
 def main(args):
     plt_job = PlottingJob.load(args.jobspec)
     if args.faults:
-        pj.fault_taxonomy()
+        plt_job.fault_taxonomy()
         exit()
     for plot_type in args.plots:
         getattr(plt_job, CLI_PLOTTING_OPTIONS[plot_type])()
