@@ -9,7 +9,7 @@ DATE=`date`
 
 # set default command-line arg values if no channels are specified
 if [ "$#" -eq 0 ]; then
-    set -- ~/slow-channel-scratch/o{1,2}_slow_channels
+    set -- ~/slow-channel-scratch/o1_slow_channels
 
 for jobdir in "$@"; do
     echo "on jobdir ${jobdir}"
