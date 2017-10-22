@@ -41,10 +41,31 @@
     "plots": [
       {
         "plot_properties": {
+          "outliers_lower_bound": -2e-6,
+          "outliers_upper_bound":  2e-6,
+          "detrend": "linear",
           "#handle_unrecorded_values": "ignore",
           "#detrend": "linear",
           "#omitted_indices_comment": "All valid times, look like unrecorded.",
           "#omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
+          "omitted_indices": [218],
+          "ylim_top": 170,
+          "ylim_bottom": -130
+        },
+        "dq_flag": "H1:DMT-ANALYSIS_READY:1",
+        "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+      },
+      {
+        "plot_properties": {
+          "outliers_lower_bound": -2e-6,
+          "outliers_upper_bound":  2e-6,
+          "detrend": "none",
+          "fname_desc": "original-data",
+          "#handle_unrecorded_values": "ignore",
+          "#detrend": "linear",
+          "#omitted_indices_comment": "All valid times, look like unrecorded.",
+          "#omitted_indices": [41, 80, 112, 264, 375, 394, 609, 670, 708, 709],
+          "omitted_indices": [218],
           "#ylim_top": 80,
           "#ylim_bottom": -80
         },

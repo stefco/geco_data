@@ -150,12 +150,42 @@ comparator B channels are not connected to anything.
 **** DONE Resolve symlinks for jobspec file
      CLOSED: [2017-10-04 Wed 17:07]
 
-*** STARTED Copy output files to ldas-pcdev2
+*** DONE Copy output files to ldas-pcdev2
+    CLOSED: [2017-10-04 Wed 17:17]
     :LOGBOOK:
-    CLOCK: [2017-10-04 Wed 17:08]
+    CLOCK: [2017-10-04 Wed 17:08]--[2017-10-04 Wed 17:17] =>  0:09
     CLOCK: [2017-10-04 Wed 16:35]--[2017-10-04 Wed 16:48] =>  0:13
     :END:
-*** TODO Generate plots
+
+    Also back up files to ~research/archive/slow-channel-dumps~.
+
+*** STARTED Add segment lists to output file list
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 17:55]--[2017-10-04 Wed 21:30] =>  3:35
+    :END:
+
+    Segment lists are used to figure out which time segments were good for
+    the detector. These should be considered output files to prevent redundant
+    downloading when unpacking an archived job. Since they are necessary for
+    any work involving a jobspec file anyway, you want to know whether they
+    are there, and it is thus important to list their status when the -o flag
+    is given. It is also therefore important to include them in the archive,
+    so that later data analysis can be performed offline.
+
+*** STARTED Generate plots
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 17:18]--[2017-10-04 Wed 23:53] =>  6:35
+    :END:
+
+    This took way too long and made way too many zoom plots. It also forced
+    the downloading of thousands of files and more than doubled storage used.
+    This is because the LHO Cesium clock was outside of the default anomaly
+    window for most of the run. Just about every anomaly was a plain old
+    outlier.
+
+    Adding a new TODO item to fix this now.
+
+*** TODO Add a CLI to ~geco_slow_channel_plot~
 *** TODO Diagnose faults
 *** TODO Update Cesium document
 

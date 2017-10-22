@@ -1,26 +1,17 @@
 #!/usr/bin/env python
 # (c) Stefan Countryman 2017
 
-import matplotlib
-if __name__ == '__main__':
-    # necessary for headless plotting
-    matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.font_manager
-import matplotlib.patches
-import multiprocessing
-import numpy as np
-import scipy.stats
-import geco_gwpy_dump
-from geco_gwpy_dump import SEC_PER
-import gwpy.segments
-import gwpy.time
-import h5py
+###############################################################################
+#
+# IMPORT ARGUMENT PARSER
+#
+###############################################################################
+
+import argparse
+import textwrap
 import collections
-import logging
-import json
-import sys
-import abc
+# ALL OTHER IMPORTS LISTED AFTER ARGUMENT PARSING; this allows for fast
+# documentation access. Variables are declared first; import follow.
 
 ###############################################################################
 #
@@ -28,10 +19,12 @@ import abc
 #
 ###############################################################################
 
+DESC = """Generate plots for months worth of aLIGO timing diagnostic data
+along with zoomed plots highlighting anomalous sections of each channel.
+Almost everything about the plots is specified in ``jobspec.json``."""
 DEFAULT_TREND = ''
 DEFAULT_PLOT_FILETYPE = 'png'
 DEFAULT_PLOT_PROPERTIES = {
-    "save_sidecars": True,
     "omitted_indices": list(),
     "outliers_lower_bound": -1e-6,
     "outliers_upper_bound": 1e-6,
@@ -57,8 +50,6 @@ DEFAULT_PLOT_PROPERTIES = {
     "fname_desc": None
 }
 PLOT_PROPERTY_DESCRIPTIONS = {
-    "save_sidecars": ("If true, save a sidecar file with missing and "
-                     "unrecorded data saved in it for easier investigation."),
     "outliers_lower_bound": "Smallest value not considered an outlier [s].",
     "outliers_upper_bound": "Largest value not considered an outlier [s].",
     "omitted_indices": ("Optionally, provide a list of indices that should be "
@@ -160,10 +151,8 @@ UNRECORDED_VALUE_CONSTANT = 0.0
 MISSING_VALUE_CONSTANT = -1.0
 # should we subtract mean values from plots where this is relevant?
 DEFAULT_SUBTRACT_MEANS = True
-# make matplotlib legend fonts smaller so that they take up less space
-DEFAULT_LEGEND_FONT = matplotlib.font_manager.FontProperties()
-DEFAULT_LEGEND_FONT.set_size('small')
 DEFAULT_AXES_POSITION = [0.125, 0.1, 0.775, 0.73]
+# DEFAULT_LEGEND_FONT
 DEFAULT_TITLE_OFFSET = 1.07
 COMBINED_TRENDS = [
     ".mean,m-trend",
@@ -172,6 +161,83 @@ COMBINED_TRENDS = [
     ".rms,m-trend",
     ".n,m-trend"
 ]
+# a dict mapping CLI plot names to PlottingJob bound plotting methods
+CLI_PLOTTING_OPTIONS = collections.OrderedDict([
+    ('individual', 'make_individual_plots'),
+    ('combined',   'make_combined_plots'),
+    ('zoom',       'make_bad_time_zoom_plots'),
+    ('doublezoom', 'make_bad_time_double_zoom_plots')
+])
+CLI_DEFAULT_JOBSPEC = "jobspec.json"
+
+###############################################################################
+#
+# CONFIGURE ARGUMENT PARSER
+#
+###############################################################################
+
+# a function for documenting plot_properties
+def print_plot_properties():
+    """Print out a list of plot properties and their descriptions."""
+    for key, val in PLOT_PROPERTY_DESCRIPTIONS.items():
+        print(textwrap.fill('``{}``: {}'.format(key, val), width=72,
+                            initial_indent='- ', subsequent_indent='  '))
+
+# quits immediately on --help or -h flags to avoid slow imports. only runs
+# if this module is used as a script and called from the command line.
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=DESC)
+    parser.add_argument("-p", "--plots",
+                        choices=tuple(CLI_PLOTTING_OPTIONS.keys()),
+                        nargs='*', default=CLI_PLOTTING_OPTIONS.keys(),
+                        help=("Which types of plots to make? Defaults to "
+                              "{}").format(CLI_PLOTTING_OPTIONS.keys()))
+    parser.add_argument("-f", "--faults", action='store_true',
+                        help=("Print out a detailed taxonomy of all anomalous "
+                              "time segments in all plots defined in this "
+                              "jobspec, then immediately quit. Very useful for "
+                              "debugging plots and methodically identifying "
+                              "faults."))
+    parser.add_argument("-j", "--jobspec", default=CLI_DEFAULT_JOBSPEC,
+                        help=("Which job specification file to load from?"
+                              "Defaults to {}").format(CLI_DEFAULT_JOBSPEC))
+    parser.add_argument("--helpplotprops", action='store_true',
+                        help=("Print out a list of "
+                              "``plot_properties`` keys and descriptions of "
+                              "what they mean, then quit immediately."))
+    args = parser.parse_args()
+    if args.helpplotprops:
+        print_plot_properties()
+        exit()
+
+###############################################################################
+#
+# IMPORTS
+#
+###############################################################################
+
+import matplotlib
+if __name__ == '__main__':
+    # necessary for headless plotting
+    matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.font_manager
+# make matplotlib legend fonts smaller so that they take up less space
+DEFAULT_LEGEND_FONT = matplotlib.font_manager.FontProperties()
+DEFAULT_LEGEND_FONT.set_size('small')
+import matplotlib.patches
+import multiprocessing
+import numpy as np
+import scipy.stats
+import geco_gwpy_dump
+from geco_gwpy_dump import SEC_PER
+import gwpy.segments
+import gwpy.time
+import h5py
+import logging
+import json
+import sys
+import abc
 
 ###############################################################################
 #
@@ -565,10 +631,6 @@ class Plotter(Cacheable):
                 bad['outliers'][varname] = list(get_outlier_indices(array,
                                                                     minval,
                                                                     maxval))
-        # save this data to a sidecar file for separate inspection
-        #if self.plot_properties['save_sidecars']:
-        #    with open(self.fname_sidecar, 'w') as f:
-        #        json.dump(bad, f, indent=2)
         # put the bad indices in PlotVars namedtuples inside a BadIndices
         # namedtuple
         nt = self.PlotVars._namedtuple()
@@ -816,10 +878,6 @@ class Plotter(Cacheable):
         """Get the filename for this plot. If a filename description is
         provided as the fname_desc key in the plot_properties for this plot in
         the jobspec file, this description should be appended to the title."""
-    @property
-    def fname_sidecar(self):
-        """Return the filename for this plot's metadata sidecar file"""
-        return self.fname + '.sidecar.json'
     @abc.abstractmethod
     def plot_timeseries(self, ax):
         """Take a Matplotlib Axes object and plot the timeries associated with
@@ -1209,8 +1267,13 @@ class PlottingJob(Cacheable):
         ``PlottingJob.bad_time_zoom_plots`` for details."""
         #mapf = multiprocessing.Pool(processes=NUM_THREADS).map
         mapf = map
-        all_plots = self.bad_time_zoom_plots + self.bad_time_double_zoom_plots
-        mapf(_save_plot, all_plots)
+        mapf(_save_plot, self.bad_time_zoom_plots)
+    def make_bad_time_double_zoom_plots(self):
+        """Save all doubly zoomed plots from bad times for this
+        ``PlottingJob``. See ``PlottingJob.bad_time_double_zoom_plots`` for
+        details."""
+        mapf = map
+        mapf(_save_plot, self.bad_time_double_zoom_plots)
 
 class IndividualPlotter(TrendDataPlotter):
     """Defines the parameters of a specific slow channel plot and provides
@@ -1554,14 +1617,13 @@ class BadTimesZoomPlotter(FullDataPlotter):
                     zoomed_plots.append(p)
         return zoomed_plots
 
-def main():
-    if len(sys.argv) == 1:
-        plt_job = PlottingJob.load()
-    else:
-        plt_job = PlottingJob.load(sys.argv[1])
-    plt_job.make_combined_plots()
-    plt_job.make_individual_plots()
-    plt_job.make_bad_time_zoom_plots()
+def main(args):
+    plt_job = PlottingJob.load(args.jobspec)
+    if args.faults:
+        plt_job.fault_taxonomy()
+        exit()
+    for plot_type in args.plots:
+        getattr(plt_job, CLI_PLOTTING_OPTIONS[plot_type])()
 
 if __name__ == "__main__":
-    main()
+    main(args)
