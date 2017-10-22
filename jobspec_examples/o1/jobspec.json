@@ -43,11 +43,23 @@
         "dq_flag": "H1:DMT-ANALYSIS_READY:1",
         "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
         "plot_properties": {
-          "#detrend": "linear",
-          "outliers_lower_bound": -5e-6,
-          "outliers_upper_bound":  5e-6,
+          "outliers_lower_bound": -2e-6,
+          "outliers_upper_bound":  2e-6,
+          "detrend": "none",
+          "fname_desc": "original-data",
           "#ylim_bottom": -80,
           "#ylim_top": 100
+        }
+      },
+      {
+        "dq_flag": "H1:DMT-ANALYSIS_READY:1",
+        "channel": "H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1",
+        "plot_properties": {
+          "outliers_lower_bound": -2e-6,
+          "outliers_upper_bound":  2e-6,
+          "detrend": "linear",
+          "ylim_bottom": -100,
+          "ylim_top": 110
         }
       },
       {
