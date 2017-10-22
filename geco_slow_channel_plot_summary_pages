@@ -10,6 +10,7 @@ DATE=`date`
 # set default command-line arg values if no channels are specified
 if [ "$#" -eq 0 ]; then
     set -- ~/slow-channel-scratch/o1_slow_channels
+fi
 
 for jobdir in "$@"; do
     echo "on jobdir ${jobdir}"
@@ -20,7 +21,15 @@ for jobdir in "$@"; do
 
     # get the run title
     pushd ${jobdir}
-    RUN=`python -c 'import json; f = open("jobspec.json"); run = json.load(f)["slow_channel_plots"]["run"]; f.close(); print(run)'`
+    # the ugly wrapping python code below just dedents the text so that it is
+    # valid python
+    RUN="$(python -c 'import textwrap; exec(textwrap.dedent(r"""
+        import json
+        f = open("jobspec.json")
+        run = json.load(f)["slow_channel_plots"]["run"]
+        f.close()
+        print(run)
+    """+" "*4))')"
 
     # generate plots for each job
     geco_slow_channel_plot.py
