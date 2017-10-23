@@ -16,8 +16,9 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
     parser.add_argument(
-        "-s",
+        "-t",
         "--start",
+        required=True,
         type=int,
         help="""
             The starting GPS time for this dump. Will be rounded down to the
@@ -28,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d",
         "--deltat",
+        required=True,
         type=int,
         help="""
             The length of the time window in which to seek frame files,
@@ -35,6 +37,7 @@ if __name__ == "__main__":
         """
     )
     parser.add_argument(
+        "-s",
         "--server",
         default=DEFAULT_SERVER,
         help="""
@@ -85,6 +88,7 @@ if __name__ == "__main__":
 
 import numpy as np
 import subprocess
+import os
 
 class GWDataFindException(Exception):
     """An error thrown when ``gw_data_find`` on the remote server fails."""
@@ -93,16 +97,15 @@ class GWDataDownloadException(Exception):
     """An error thrown when ``gsiscp`` fails to download the desired data."""
 
 class GWFrameQuery(object):
-    """An object specifying the detector, frametype, frame start time,
-    output filename, output directory, and server where remote data is stored
-    for a GW frame.  Used to check if the frame file exists, and, if it
-    doesn't, to find the file on a remote server and download it."""
-    def __init__(self, detector, frametype, gpstime, outfile,
+    """An object specifying the detector, frametype, frame start time, output
+    directory, and server where remote data is stored for a GW frame.  Used to
+    check if the frame file exists, and, if it doesn't, to find the file on a
+    remote server and download it."""
+    def __init__(self, detector, frametype, gpstime,
                  server=DEFAULT_SERVER, outdir=DEFAULT_OUTDIR):
         self.detector   = detector
         self.frametype  = frametype
         self.gpstime    = gpstime
-        self.outfile    = outfile
         self.server     = server
         self.outdir     = outdir
 
@@ -166,6 +169,16 @@ class GWFrameQuery(object):
             raise GWDataDownloadException(
                 "Something went wrong: {}".format(err)
             )
+    def __repr__(self):
+        fmt = "{}('{}', '{}', '{}', server='{}', outdir='{}')"
+        return fmt.format(
+            type(self).__name__,
+            self.detector,
+            self.frametype,
+            self.gpstime,
+            self.server,
+            self.outdir
+        )
 
 def get_times(start, deltat):
     """Get a list of start times for frame files based on in initial starting
@@ -175,13 +188,58 @@ def get_times(start, deltat):
     times for LVC frame files. Similarly, the time window ``deltat`` will be
     rounded up to the nearest multiple of 64."""
     start  = int(np.floor(start // 64)) * 64
-    deltat = int(np.ceil( start // 64)) * 64
+    deltat = int(np.ceil(deltat // 64)) * 64
     return range(start, start+deltat+64, 64)
 
-def get_queries(
+def get_queries(start, deltat, server=DEFAULT_SERVER, outdir=DEFAULT_OUTDIR,
+                h_frametypes=DEFAULT_H_FRAMETYPES,
+                l_frametypes=DEFAULT_L_FRAMETYPES,
+                v_frametypes=DEFAULT_V_FRAMETYPES):
+    """Get all GWFrameQuery objects in the given time window for each
+    combination of detector and frametype provided.
+
+    Args:
+
+        ``start``       The GPS time at which the time window starts.
+        ``deltat``      The width of the time window in seconds.
+        ``server``      The server on which to look for frame files.
+        ``outdir``      The output directory where downloaded files should be
+                        saved.
+
+    Additionally, one can specify the frame file types to be downloaded for
+    each detector:
+
+        ``h_frametypes``    Frametypes for LIGO Hanford.
+        ``l_frametypes``    Frametypes for LIGO Livingston.
+        ``v_frametypes``    Frametypes for Virgo.
+    """
+    queries = list()
+    # add queries for each detector/frametype combination
+    detector_frametypes_dict = {
+        "H": h_frametypes,
+        "L": l_frametypes,
+        "V": v_frametypes
+    }
+    for detector in detector_frametypes_dict.keys():
+        for frametype in detector_frametypes_dict[detector]:
+            queries += [GWFrameQuery(detector, frametype, t, server=server,
+                                     outdir=outdir)
+                        for t in get_times(start, deltat)]
+    return queries
 
 def main(args):
-    times = get_times(args.start, args.deltat)
+    queries = get_queries(
+        args.start,
+        args.deltat,
+        server=args.server,
+        outdir=args.outdir,
+        h_frametypes=args.hanford_frametypes,
+        l_frametypes=args.livingston_frametypes,
+        v_frametypes=args.virgo_frametypes
+    )
+    for query in queries:
+        if not query.exists():
+            query.download()
 
 if __name__ == "__main__":
     main(args)
