@@ -1,0 +1,26 @@
+#!/bin/bash
+# (c) Stefan Countryman, 2017
+
+help () {
+    cat <<"__EOF__"
+Show the status of slurm jobs whose output log files are in the current
+directory.
+__EOF__
+}
+
+if [ $# -ne 0 ]; then
+    if [ "$1"z = -hz ]; then
+        help
+        exit
+    fi
+fi
+
+for f in $(ls -tr *out); do
+    printf '\nFILE: %s\nSTAT:\n' "${f}"
+    stat "${f}"
+    echo
+    tail -30 "${f}"
+    j=${f%.out}
+    job=${j#slurm-}
+    scontrol show job ${job} 2>/dev/null
+done
