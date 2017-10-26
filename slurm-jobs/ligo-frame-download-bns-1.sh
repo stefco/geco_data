@@ -3,7 +3,7 @@
 # Download one day worth of LIGO data
 #
 #SBATCH --account=geco
-#SBATCH --job-name=LIGOFrameDownload
+#SBATCH --job-name=LIGOFrameDownloadBNS1
 #SBATCH -c 1                 # number of CPU cores to use
 #SBATCH --time=24:00:00    # run for a day
 #SBATCH --mem-per-cpu=2gb
