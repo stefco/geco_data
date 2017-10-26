@@ -14,3 +14,7 @@ pass=$(cat /rigel/home/stc2117/ligopass.txt)
 
 cd /rigel/home/stc2117/frames
 get_whole_frame_files.py -t 1186704000 -d 86400
+
+# mark end time
+printf 'JOB EXITING.\n'
+date

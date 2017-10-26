@@ -21,3 +21,7 @@ get_whole_frame_files.py \
     --deltat                86400 \
     --hanford-frametypes    H1_HOFT_C00 H1_R \
     --livingston-frametypes L1_HOFT_C00 L1_R
+
+# mark end time
+printf 'JOB EXITING.\n'
+date
