@@ -101,6 +101,7 @@ import numpy as np
 import collections
 import subprocess
 import datetime
+import time
 import os
 
 class GWDataFindException(Exception):
@@ -114,6 +115,10 @@ class GWRemoteSha256Exception(Exception):
 
 class GWLocalSha256Exception(Exception):
     """An error thrown when ``sha256sum`` fails locally."""
+
+def time_since_file_modified(filename):
+    """Get the elapsed time in seconds since a file was modified."""
+    return time.time() - os.path.getmtime(filename)
 
 class RemoteFileInfo(object):
     """A container holding data about a remote frame file (based on its
@@ -358,12 +363,16 @@ class GWFrameQuery(object):
         # If it is corrupt, delete it so that it can be redownloaded.
         if os.path.isfile(local_fullpath):
             if self.local_file_corrupted(remote_url):
-                errtime = datetime.datetime.utcnow().isoformat()
-                errfmt = "CORRUPT FILE FOUND at {}. DELETING AND PROCEEDING.\n"
-                errmsg = errfmt.format(errtime)
-                with open(riders.error_msg, 'a') as f:
-                    f.write(errmsg)
-                os.remove(local_fullpath)
+                #  check whether the file was modified in the last minute.  If
+                #  so, then it might still be an active download and should be
+                #  left alone.
+                if time_since_file_modified(local_fullpath) > 60:
+                    errtime = datetime.datetime.utcnow().isoformat()
+                    errfmt = "CORRUPT FILE at {}. DELETING AND PROCEEDING.\n"
+                    errmsg = errfmt.format(errtime)
+                    with open(riders.error_msg, 'a') as f:
+                        f.write(errmsg)
+                    os.remove(local_fullpath)
         # only download the file if it does not exist locally.
         if not os.path.isfile(local_fullpath):
             download_url = '{}:{}'.format(self.server, remote_url)
