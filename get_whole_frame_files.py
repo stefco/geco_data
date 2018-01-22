@@ -321,6 +321,29 @@ class GWFrameQuery(object):
             raise GWLocalSha256Exception(errmsg)
         return res.split()[0]
 
+    def local_file_corrupted(self, remote_url=None):
+        """Check whether the local downloaded file is corrupt, e.g. due to an
+        interrupted download or disk corruption. Returns ``True`` if the file
+        is corrupted, ``False`` otherwise. Figures out the local filename
+        from the ``self.remote_url()``. Optionally, override this check by
+        providing the remote URL returned by ``gw_data_find`` on the remote
+        server (to save time if it has already been calculated)."""
+        if remote_url == None:
+            remote_url = self.remote_url()
+        riders = self.local_rider_fullpaths_from_remote(remote_url)
+        try:
+            with open(riders.remote_sha256, 'r') as f:
+                remote_sha256 = f.read()
+            with open(riders.local_sha256, 'r') as f:
+                local_sha256 = f.read()
+            if local_sha256 != remote_sha256:
+                return True
+        except IOError:
+            return True
+        # if we made it to the end, checks have passed and the file is not
+        # corrupt
+        return False
+
     def download(self):
         """Download the file specified in ``self.remote_url()`` from the
         remote server. The remote file might actually have a different filename
@@ -329,10 +352,21 @@ class GWFrameQuery(object):
         local filename differs. Also write the ``self.remote_url()`` to a rider
         file for future reference."""
         remote_url = self.remote_url()
+        local_fullpath = self.local_fullpath_from_remote(remote_url)
+        riders = self.local_rider_fullpaths_from_remote(remote_url)
+        # Check whether the file has been partially downloaded or is corrupt.
+        # If it is corrupt, delete it so that it can be redownloaded.
+        if os.path.isfile(local_fullpath):
+            if self.local_file_corrupted(remote_url):
+                errtime = datetime.datetime.utcnow().isoformat()
+                errfmt = "CORRUPT FILE FOUND at {}. DELETING AND PROCEEDING.\n"
+                errmsg = errfmt.format(errtime)
+                with open(riders.error_msg, 'a') as f:
+                    f.write(errmsg)
+                os.remove(local_fullpath)
         # only download the file if it does not exist locally.
-        if not self.local_fullpath_from_remote_exists(remote_url):
+        if not os.path.isfile(local_fullpath):
             download_url = '{}:{}'.format(self.server, remote_url)
-            riders = self.local_rider_fullpaths_from_remote(remote_url)
             # record the remote url for debugging and record-keeping
             with open(riders.remote_url, 'w') as f:
                 f.write(remote_url)
@@ -342,7 +376,7 @@ class GWFrameQuery(object):
             cmd = [
                 'gsiscp',
                 download_url,
-                self.local_fullpath_from_remote(remote_url)
+                local_fullpath
             ]
             proc = subprocess.Popen(
                 cmd,
