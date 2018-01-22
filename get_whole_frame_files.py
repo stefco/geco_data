@@ -31,6 +31,7 @@ if __name__ == "__main__":
         "-l",
         "--length",
         default=DEFAULT_FRAME_LENGTH,
+        type=int,
         help="""
             The duration of each frame file. The script is dumb and will only
             try to find files assuming this length. DEFAULT: {}
@@ -133,7 +134,7 @@ class RemoteFileInfo(object):
     def fullpath(self):
         """Return the full path on the remote server (removing the
         "file://localhost" prefix from the response string)."""
-        return self.gw_data_find_response.replace(FILE_URL_PREFIX, '')
+        return self.gw_data_find_response.replace(self.FILE_URL_PREFIX, '')
     @property
     def filename(self):
         """Get the remote filename without the containing directory."""
@@ -227,12 +228,6 @@ class GWFrameQuery(object):
     ]
     RIDER_FORMAT = '.{}.{}.txt'
     LocalRiders = collections.namedtuple('LocalRiders', LOCAL_RIDER_TYPES)
-    LocalRiders.__doc__ = """
-        A container for rider file paths specifying metadata about our
-        downloads including remote URL and remote/local sha256 sums as well as
-        information on GWFrameQuery instance used and any error messages
-        generated while downloading data.
-    """
 
     def local_rider_fullpaths_from_remote(self, remote_url):
         """Get a ``LocalRiders`` namedtuple specifying the file paths to
@@ -247,7 +242,10 @@ class GWFrameQuery(object):
                 rider_type
             ) for rider_type in self.LOCAL_RIDER_TYPES
         ]
-        return self.LocalRiders(*rider_filenames)
+        rider_fullpaths = [
+            os.path.join(self.outdir, fname) for fname in rider_filenames
+        ]
+        return self.LocalRiders(*rider_fullpaths)
 
     def local_fullpath_from_remote_exists(self, remote_url):
         """Check whether the local file corresponding to the remote_url exists.
@@ -428,6 +426,7 @@ def get_queries(
 
         ``start``       The GPS time at which the time window starts.
         ``deltat``      The width of the time window in seconds.
+        ``length``      The expected duration in seconds of each frame file.
         ``server``      The server on which to look for frame files.
         ``outdir``      The output directory where downloaded files should be
                         saved.
@@ -448,8 +447,9 @@ def get_queries(
     }
     for detector in detector_frametypes_dict.keys():
         for frametype in detector_frametypes_dict[detector]:
-            queries += [GWFrameQuery(detector, frametype, t, length=length,
-                                     server=server, outdir=outdir)
+            queries += [GWFrameQuery(detector, frametype, t,
+                                     framelength=length, server=server,
+                                     outdir=outdir)
                         for t in get_times(start, deltat, length)]
     return queries
 
