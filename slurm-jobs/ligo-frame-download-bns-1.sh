@@ -17,7 +17,7 @@ pass="$(cat /rigel/home/stc2117/ligopass.txt)"
 
 cd /rigel/home/stc2117/frames
 get_whole_frame_files.py \
-    --server                ldas-pcdev1.ligo.caltech.edu
+    --server                ldas-pcdev1.ligo.caltech.edu \
     --start                 "${start}" \
     --deltat                86400 \
     --hanford-frametypes    H1_HOFT_C00 H1_R \
