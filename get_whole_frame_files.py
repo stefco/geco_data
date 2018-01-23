@@ -102,6 +102,7 @@ import collections
 import subprocess
 import datetime
 import time
+import sys
 import os
 
 class GWDataFindException(Exception):
@@ -116,9 +117,23 @@ class GWRemoteSha256Exception(Exception):
 class GWLocalSha256Exception(Exception):
     """An error thrown when ``sha256sum`` fails locally."""
 
+class FileNameParsingError(Exception):
+    """An error thrown when a filename that must be parsed does not follow the
+    expected format. The message should contain some information about the
+    unparsable filename to aid in debugging."""
+
 def time_since_file_modified(filename):
     """Get the elapsed time in seconds since a file was modified."""
     return time.time() - os.path.getmtime(filename)
+
+def complain(msg):
+    """Write a message to stderr if running in interactive mode or if the
+    ``--verbose`` flag is set. Otherwise, throw away the message."""
+    #TODO add actual verbosity flag. For now, just always log messages to
+    # stderr.
+    fmt = "---[{}]---\n{}\n"
+    formatted_message = fmt.format(datetime.datetime.now().isoformat(), msg)
+    sys.stderr.write(formatted_message)
 
 class RemoteFileInfo(object):
     """A container holding data about a remote frame file (based on its
@@ -147,11 +162,21 @@ class RemoteFileInfo(object):
     @property
     def gps_start_time(self):
         """Get the GPS start time of this frame file."""
-        return self.filename.split('.')[0].split('-')[2]
+        try:
+            return self.filename.split('.')[0].split('-')[2]
+        except IndexError as e:
+            msg = 'Cannot get GPS start time from filename: ' + self.filename
+            complain(msg)
+            raise FileNameParsingError(msg)
     @property
     def frame_duration(self):
         """Get the duration in seconds of this frame file."""
-        return self.filename.split('.')[0].split('-')[3]
+        try:
+            return self.filename.split('.')[0].split('-')[3]
+        except IndexError as e:
+            msg = 'Cannot get frame duration from filename: ' + self.filename
+            complain(msg)
+            raise FileNameParsingError(msg)
 
 class GWFrameQuery(object):
     """An object specifying the detector, frametype, frame start time, output
@@ -234,12 +259,26 @@ class GWFrameQuery(object):
     RIDER_FORMAT = '.{}.{}.txt'
     LocalRiders = collections.namedtuple('LocalRiders', LOCAL_RIDER_TYPES)
 
-    def local_rider_fullpaths_from_remote(self, remote_url):
+    def estimated_rider_fullpaths(self):
         """Get a ``LocalRiders`` namedtuple specifying the file paths to
         rider files for this query. These files contain metadata about the
         remote download, specifically, the remote and local sha256 sums, the
         file query used to generate the file, and the remote_url originally
-        returned by gw_data_find."""
+        returned by gw_data_find. This is based on the *expected* filename, not
+        the actual filename as determined by ``gw_data_find``."""
+        filename = self.estimated_filename
+        rider_filenames = [
+            self.RIDER_FORMAT.format(
+                filename,
+                rider_type
+            ) for rider_type in self.LOCAL_RIDER_TYPES
+        ]
+        rider_fullpaths = [
+            os.path.join(self.outdir, fname) for fname in rider_filenames
+        ]
+        return self.LocalRiders(*rider_fullpaths)
+
+    def local_rider_fullpaths_from_remote(self, remote_url):
         actual_local_filename = self.local_filename_from_remote(remote_url)
         rider_filenames = [
             self.RIDER_FORMAT.format(
@@ -357,7 +396,15 @@ class GWFrameQuery(object):
         local filename differs. Also write the ``self.remote_url()`` to a rider
         file for future reference."""
         remote_url = self.remote_url()
-        local_fullpath = self.local_fullpath_from_remote(remote_url)
+        # we might not be able to parse the path if the remote file does not
+        # exist. in this case, log the error and move on to the next file.
+        try:
+            local_fullpath = self.local_fullpath_from_remote(remote_url)
+        except FileNameParsingError as e:
+            estimated_riders = self.estimated_rider_fullpaths()
+            with open(estimated_riders.error_msg, 'a') as f:
+                f.write(e.args[0] + '\n')
+            raise e
         riders = self.local_rider_fullpaths_from_remote(remote_url)
         # Check whether the file has been partially downloaded or is corrupt.
         # If it is corrupt, delete it so that it can be redownloaded.
@@ -509,7 +556,10 @@ def main(args):
     )
     for query in queries:
         if not query.estimated_fullpath_exists():
-            query.download()
+            try:
+                query.download()
+            except FileNameParsingError as e:
+                complain('File name parsing error, skipping:\n' + repr(query))
 
 if __name__ == "__main__":
     main(args)
