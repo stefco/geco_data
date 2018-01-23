@@ -4,8 +4,8 @@
 DESC = """Find all frame files of a given frame type in a given time range on
 a remote LIGO server and download them to the specified output directory,
 skipping any files that have already been downloaded."""
-DEFAULT_H_FRAMETYPES = ['H1_R']
-DEFAULT_L_FRAMETYPES = ['L1_R']
+DEFAULT_H_FRAMETYPES = []
+DEFAULT_L_FRAMETYPES = []
 DEFAULT_V_FRAMETYPES = []
 DEFAULT_FRAME_LENGTH = 64
 DEFAULT_SERVER = 'ldas-pcdev2.ligo.caltech.edu'
@@ -71,7 +71,9 @@ if __name__ == "__main__":
         nargs="*",
         default=DEFAULT_H_FRAMETYPES,
         help="""
-            The frametypes to download for the Hanford detector (LHO). DEFAULT:
+            The frametypes to download for the Hanford detector (LHO). These
+            can be things like raw files (H1_R) or increasingly calibrated
+            strain files (H1_HOFT_C00, H1_HOFT_C01, or H1_HOFT_C02). DEFAULT:
             {}
             """.format(DEFAULT_H_FRAMETYPES)
     )
@@ -81,8 +83,10 @@ if __name__ == "__main__":
         nargs="*",
         default=DEFAULT_L_FRAMETYPES,
         help="""
-            The frametypes to download for the Livingston detector (LLO).
-            DEFAULT: {}
+            The frametypes to download for the Livingston detector (LLO). These
+            can be things like raw files (L1_R) or increasingly calibrated
+            strain files (L1_HOFT_C00, L1_HOFT_C01, or L1_HOFT_C02). DEFAULT:
+            {}
             """.format(DEFAULT_L_FRAMETYPES)
     )
     parser.add_argument(

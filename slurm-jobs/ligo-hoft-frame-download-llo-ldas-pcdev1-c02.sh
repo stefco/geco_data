@@ -35,7 +35,6 @@ get_whole_frame_files.py \
     --outdir                "${outdir}" \
     --length                "${frame_length}" \
     --server                "${server}" \
-    --hanford-frametypes    H1_HOFT_C02 \
     --livingston-frametypes L1_HOFT_C02
 
 # mark end time
