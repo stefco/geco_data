@@ -3,10 +3,12 @@
 # Download one day worth of LIGO data
 #
 #SBATCH --account=geco
-#SBATCH --job-name=LIGOFrameDownloadBNS
+#SBATCH --job-name=LIGOhoftFrameDownloadLdasPcdev2C02
 #SBATCH -c 1                 # number of CPU cores to use
 #SBATCH --time=72:00:00      # run for 3 days
 #SBATCH --mem-per-cpu=2gb
+#SBATCH --mail-type=ALL        # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=stefan.countryman@gmail.com     # Where to send mail
 
 # BNS merger date
 start=1185580818    # `lalapps_tconvert Aug 1 2017`

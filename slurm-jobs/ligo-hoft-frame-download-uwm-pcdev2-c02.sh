@@ -3,7 +3,7 @@
 # Download one day worth of LIGO data
 #
 #SBATCH --account=geco
-#SBATCH --job-name=LIGOhoftFrameDownloadLdasPcdev5C02
+#SBATCH --job-name=LIGOhoftFrameDownloadUWMPcdev2C02
 #SBATCH -c 1                 # number of CPU cores to use
 #SBATCH --time=72:00:00      # run for 3 days
 #SBATCH --mem-per-cpu=2gb
@@ -23,7 +23,7 @@ frame_length=4096
 deltat=2592000  # 30 days.
 
 # what server to download from?
-server=ldas-pcdev5.ligo.caltech.edu
+server=pcdev2.cgca.uwm.edu
 
 # not a great hack
 pass="$(cat /rigel/home/stc2117/ligopass.txt)"
