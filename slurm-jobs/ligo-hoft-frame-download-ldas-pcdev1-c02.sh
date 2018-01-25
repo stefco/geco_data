@@ -3,19 +3,19 @@
 # Download one day worth of LIGO data
 #
 #SBATCH --account=geco
-#SBATCH --job-name=LIGOhoftFrameDownloadLdasPcdev1C02
-#SBATCH -c 1                 # number of CPU cores to use
-#SBATCH --time=72:00:00      # run for 3 days
+#SBATCH --job-name=LIGOFrameDownload
+#SBATCH -c 1                # number of CPU cores to use
+#SBATCH --time=72:00:00     # run for 3 days
 #SBATCH --mem-per-cpu=2gb
-#SBATCH --mail-type=ALL        # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-type=ALL     # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=stefan.countryman@gmail.com     # Where to send mail
 
 #--[ USER INPUT ]--
 
 # Set the start and end times for this dump in ISO Format
-STARTMONTH=08
+STARTMONTH=01
 STARTYEAR=2017
-ENDMONTH=09
+ENDMONTH=02
 ENDYEAR=2017
 
 # how many seconds of data in each frame?
@@ -30,8 +30,9 @@ server=ldas-pcdev1.ligo.caltech.edu
 UTCSTART="${STARTYEAR}-${STARTMONTH}-01T00:00:00"
 UTCEND="${ENDYEAR}-${ENDMONTH}-01T00:00:00"
 
-start=$(/rigel/home/stc2117/bin/tconvert ${STARTYEAR}-${STARTMONTH}-01)
-end=$(/rigel/home/stc2117/bin/tconvert ${ENDYEAR}-${ENDMONTH}-01)
+# Must have the tconvert script installed for this to work
+start=$(tconvert ${STARTYEAR}-${STARTMONTH}-01)
+end=$(tconvert ${ENDYEAR}-${ENDMONTH}-01)
 deltat=$((end - start))
 
 # name output directory after start/end gps times
@@ -42,7 +43,7 @@ echo OUTDIR: "${outdir}"
 
 # not a great hack
 pass="$(cat /rigel/home/stc2117/ligopass.txt)"
-/rigel/home/stc2117/bin/hacked-ligo-proxy-init "stefan.countryman:${pass}"
+hacked-ligo-proxy-init "stefan.countryman:${pass}"
 
 get_whole_frame_files.py \
     --start                 "${start}" \
