@@ -10,12 +10,30 @@
 #SBATCH --mail-type=ALL     # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=stefan.countryman@gmail.com     # Where to send mail
 
+# Some notes on start/stop times for runs. From JRPC Committee page:
+# https://wiki.ligo.org/LSC/JRPComm/ObsRun2
+# Page also has recommendations on DQ segments and frame types.
+# O2 start:                 Wed Nov 30 16:00:00 UTC 2016
+#   in GPS:                 1164556817
+# O2 winter break start:    Thu Dec 22 23:00:00 UTC 2016
+#   in GPS:                 1166482817
+# O2 winter break end:      Wed Jan 04 16:00:00 UTC 2017
+#   in GPS:                 1167580818
+# O2 commissioning start:   Mon May 08 00:00:00 UTC 2017
+#   in GPS:                 1178236818
+# LLO resumed:              Fri May 26 06:00:00 UTC 2017
+#   in GPS:                 1179813618
+# LHO resumed:              Thu Jun 08 18:40:06 UTC 2017
+#   in GPS:                 1180982424
+# O2 end:                   Fri Aug 25 22:00:00 UTC 2017
+#   in GPS:                 1187733618
+
 #--[ USER INPUT ]--
 
 # Set the start and end times for this dump in ISO Format
-STARTMONTH=01
+STARTMONTH=02
 STARTYEAR=2017
-ENDMONTH=02
+ENDMONTH=03
 ENDYEAR=2017
 
 # how many seconds of data in each frame?
