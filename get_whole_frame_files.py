@@ -38,6 +38,15 @@ if __name__ == "__main__":
         """.format(DEFAULT_FRAME_LENGTH)
     )
     parser.add_argument(
+        "-p",
+        "--progress",
+        action="store_true",
+        help="""
+            Don't bother downloading; instead, just try to show how much
+            progress has been made on this job based on the files it finds.
+        """
+    )
+    parser.add_argument(
         "-d",
         "--deltat",
         required=True,
@@ -101,6 +110,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+import filecmp
 import numpy as np
 import collections
 import subprocess
@@ -547,6 +557,51 @@ def get_queries(
                         for t in get_times(start, deltat, length)]
     return queries
 
+def check_progress(queries):
+    """Return a dictionary of lists of queries, where the keys of the
+    dictionary indicate the status of each query."""
+    status = {
+        'all_queries':   queries,
+        'downloaded':    [],
+        'maybe_corrupt': [],
+        'corrupted':     [],
+        'remote_found':  [],
+        'remote_hashed': [],
+        'name_guessed':  [],
+        'not_started':   [],
+        'error':         []
+    }
+    for query in queries:
+        riders = query.estimated_rider_fullpaths()
+        if os.path.isfile(riders.local_sha256):
+            if os.path.isfile(riders.remote_sha256):
+                if filecmp.cmp(riders.local_sha256, riders.remote_sha256):
+                    status['downloaded'].append(query)
+                else:
+                    status['corrupted'].append(query)
+            else:
+                status['maybe_corrupt'].append(query)
+        elif os.path.isfile(riders.remote_sha256):
+            status['remote_hashed'].append(query)
+        elif os.path.isfile(riders.remote_url):
+            status['remote_found'].append(query)
+        elif os.path.isfile(riders.query_repr):
+            status['name_guessed'].append(query)
+        else:
+            status['not_started'].append(query)
+        if os.path.isfile(riders.error_msg):
+            status['error'].append(query)
+    return status
+
+def display_progress(status):
+    """Print how much progress has been made so far."""
+    total_q = len(status['all_queries'])
+    fmt = '{}: {}/{} ({}%)'
+    for key in status:
+        number_of_queries = len(status[key])
+        percent = (100.0 * number_of_queries) / total_q
+        print(fmt.format(key, number_of_queries, total_q, percent))
+
 def main(args):
     queries = get_queries(
         args.start,
@@ -558,12 +613,15 @@ def main(args):
         l_frametypes=args.livingston_frametypes,
         v_frametypes=args.virgo_frametypes
     )
-    for query in queries:
-        if not query.estimated_fullpath_exists():
-            try:
-                query.download()
-            except FileNameParsingError as e:
-                complain('File name parsing error, skipping:\n' + repr(query))
+    if args.progress:
+        display_progress(check_progress(queries))
+    else:
+        for query in queries:
+            if not query.estimated_fullpath_exists():
+                try:
+                    query.download()
+                except FileNameParsingError as e:
+                    complain('Filename parse error, skipping:\n' + repr(query))
 
 if __name__ == "__main__":
     main(args)
