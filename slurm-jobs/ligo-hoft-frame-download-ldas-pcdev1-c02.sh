@@ -59,9 +59,20 @@ outdir=/rigel/geco/users/stc2117/"${dirname}"
 mkdir -p "${outdir}"
 echo OUTDIR: "${outdir}"
 
-# not a great hack
-pass="$(cat /rigel/home/stc2117/ligopass.txt)"
-hacked-ligo-proxy-init "stefan.countryman:${pass}"
+# not a great hack; don't authenticate if we're doing local stuff
+auth_needed=0
+for var in "$@"; do
+    if [ "$var"z = -pz ] || [ "$var"z = --progressz ]; then
+        auth_needed=1
+    fi
+done
+if [ $auth_needed -eq 0 ]; then
+    echo "authenticating."
+    pass="$(cat /rigel/home/stc2117/ligopass.txt)"
+    hacked-ligo-proxy-init "stefan.countryman:${pass}"
+else
+    echo "not authenticating."
+fi
 
 get_whole_frame_files.py "$@" \
     --start                 "${start}" \
