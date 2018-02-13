@@ -602,7 +602,7 @@ def check_progress(queries):
 def display_progress(status):
     """Print how much progress has been made so far."""
     total_q = len(status['all_queries'])
-    fmt = '{}: {}/{} ({}%)'
+    fmt = '{0: <16}:   {1: >4}/{2: <4} ({3}%)'
     for key in status:
         number_of_queries = len(status[key])
         percent = (100.0 * number_of_queries) / total_q
