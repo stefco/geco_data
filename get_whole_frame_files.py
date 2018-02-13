@@ -561,15 +561,16 @@ def check_progress(queries):
     """Return a dictionary of lists of queries, where the keys of the
     dictionary indicate the status of each query."""
     status = {
-        'all_queries':   queries,
-        'downloaded':    [],
-        'maybe_corrupt': [],
-        'corrupted':     [],
-        'remote_found':  [],
-        'remote_hashed': [],
-        'name_guessed':  [],
-        'not_started':   [],
-        'error':         []
+        'all_queries':     queries,
+        'downloaded':      [],
+        'maybe_corrupt':   [],
+        'corrupted':       [],
+        'remote_found':    [],
+        'remote_hashed':   [],
+        'name_guessed':    [],
+        'no_remote_found': [],
+        'not_started':     [],
+        'error':           []
     }
     for query in queries:
         riders = query.estimated_rider_fullpaths()
@@ -588,9 +589,14 @@ def check_progress(queries):
         elif os.path.isfile(riders.query_repr):
             status['name_guessed'].append(query)
         else:
-            status['not_started'].append(query)
-        if os.path.isfile(riders.error_msg):
-            status['error'].append(query)
+            if os.path.isfile(riders.error_msg):
+                status['error'].append(query)
+                with open(riders.error_msg) as f:
+                    lasterrmsg = f.readlines()[-1]
+                if lasterrmsg == 'Cannot get GPS start time from filename: \n':
+                    status['no_remote_found'].append(query)
+            else:
+                status['not_started'].append(query)
     return status
 
 def display_progress(status):

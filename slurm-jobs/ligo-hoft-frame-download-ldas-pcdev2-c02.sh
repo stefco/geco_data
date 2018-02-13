@@ -63,7 +63,7 @@ echo OUTDIR: "${outdir}"
 pass="$(cat /rigel/home/stc2117/ligopass.txt)"
 hacked-ligo-proxy-init "stefan.countryman:${pass}"
 
-get_whole_frame_files.py \
+get_whole_frame_files.py "$@" \
     --start                 "${start}" \
     --deltat                "${deltat}" \
     --outdir                "${outdir}" \
