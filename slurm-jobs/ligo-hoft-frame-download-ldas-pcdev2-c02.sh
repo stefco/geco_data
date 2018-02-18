@@ -31,9 +31,9 @@
 #--[ USER INPUT ]--
 
 # Set the start and end times for this dump in ISO Format
-STARTMONTH=05
+STARTMONTH=07
 STARTYEAR=2017
-ENDMONTH=06
+ENDMONTH=08
 ENDYEAR=2017
 
 # how many seconds of data in each frame?
