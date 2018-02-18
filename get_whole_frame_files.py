@@ -10,6 +10,27 @@ DEFAULT_V_FRAMETYPES = []
 DEFAULT_FRAME_LENGTH = 64
 DEFAULT_SERVER = 'ldas-pcdev2.ligo.caltech.edu'
 DEFAULT_OUTDIR = '.'
+_TARGETED_SEARCH_FRAMETYPE_DICT_CIT = {
+    "H1_HOFT_C02":  "hoft_C02/H1",
+    "L1_HOFT_C02":  "hoft_C02/L1",
+    "H1_R":         "raw/H1",
+    "L1_R":         "raw/L1"
+}
+_TARGETED_SEARCH_SERVERS_CIT = ["ldas-pcdev{}.ligo.caltech.edu".format(i)
+                                for i in range(1,6)]
+# map tuples of (observing run, frametype, server) to directories
+# containing frames on the remote server for fallback frame searches.
+_TARGETED_SEARCH_DIRECTORIES = dict()
+_TARGETED_SEARCH_DIR_FMT_CIT = "/hdfs/frames/{}/{}"
+for run in ["O1", "O2"]:
+    for server in _TARGETED_SEARCH_SERVERS_CIT:
+        for frametype in _TARGETED_SEARCH_FRAMETYPE_DICT_CIT:
+            key = (run, frametype, server)
+            path = _TARGETED_SEARCH_DIR_FMT_CIT.format(
+                run,
+                _TARGETED_SEARCH_FRAMETYPE_DICT_CIT[frametype]
+            )
+            _TARGETED_SEARCH_DIRECTORIES[key] = path
 
 # all other imports listed after argument parsing, allowing for fast help
 # documentation printing.
@@ -136,6 +157,10 @@ class FileNameParsingError(Exception):
     expected format. The message should contain some information about the
     unparsable filename to aid in debugging."""
 
+class TargetedSearchException(Exception):
+    """An exception raised when a targeted search cannot be performed due to a
+    lack of target directories."""
+
 def time_since_file_modified(filename):
     """Get the elapsed time in seconds since a file was modified."""
     return time.time() - os.path.getmtime(filename)
@@ -217,7 +242,41 @@ class GWFrameQuery(object):
         --url-type file
     """
 
+    _TARGETED_SEARCH_QUERY_FMT = "find {} -name {}"
+
+    _TARGETED_SEARCH_DIRECTORIES = _TARGETED_SEARCH_DIRECTORIES
+
+    _OBSERVING_RUNS = {
+        "O1": (1126073342, 1129383140),
+        "O2": (1164556817, 1187733618)
+    }
+
     _SHA256_SUM_FMT = "sha256sum '{}'"
+
+    def execute_cmd_over_ssh(self, cmd, exception=Exception):
+        """SSH into this Query's server and run ``cmd``, capturing and
+        returning a tuple containing (stdout, stderr) and throwing the
+        specified ``exception`` type in the event of a nonzero return code."""
+        fullcmd = ['gsissh', self.server, cmd]
+        proc = subprocess.Popen(
+            fullcmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        res, err = proc.communicate()
+        if proc.returncode != 0:
+            raise exception("Something went wrong: {}".format(err))
+        return (res, err)
+
+    @property
+    def observing_run(self):
+        """Get the observing run for this query by looking at the time window
+        it belonged to. Returns ``None`` if no matching run is found."""
+        for run in self._OBSERVING_RUNS:
+            interval = self._OBSERVING_RUNS[run]
+            if (interval[0] < self.gpstime) and (self.gpstime < interval[1]):
+                return run
+        return None
 
     @property
     def estimated_filename(self):
@@ -311,24 +370,50 @@ class GWFrameQuery(object):
         frame durations, so we need to check this."""
         return os.path.isfile(self.local_fullpath_from_remote(remote_url))
 
+    def remote_url_targeted_search(self):
+        """If the remote_url search fails, we can try a targetted search
+        instead for certain frame types and time periods."""
+        run = self.observing_run
+        if run == None:
+            raise TargetedSearchException("Cannot determine run.")
+        key = (run, self.frametype, self.server)
+        try:
+            searchdir = self._TARGETED_SEARCH_DIRECTORIES[key]
+        except KeyError:
+            raise TargetedSearchException("No search target dir defined.")
+        query = self._TARGETED_SEARCH_QUERY_FMT.format(
+            searchdir,
+            self.estimated_filename
+        )
+        res, err = self.execute_cmd_over_ssh(query, TargetedSearchException)
+        try:
+            return res.split('\n')[0].strip()
+            complain("Targeted search found file for {}".format(self))
+        except IndexError:
+            raise TargetedSearchException("No remote file found.")
+
     def remote_url(self):
-        """Get the path to this frame file on the remote server."""
+        """Get the path to this frame file on the remote server. First, try a
+        search using ``gw_data_find``; if this fails, as often happens, do a
+        manually-targetted search."""
         query = self._GW_DATA_FIND_QUERY_FMT.format(
             self.detector,
             self.frametype,
             self.gpstime,
             self.gpstime
         )
-        cmd = ['gsissh', self.server, query]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        res, err = proc.communicate()
-        if proc.returncode != 0:
-            raise GWDataFindException("Something went wrong: {}".format(err))
-        return res.strip().replace('file://localhost', '')
+        res, err = self.execute_cmd_over_ssh(query, GWDataFindException)
+        remote_url = res.strip().replace('file://localhost', '')
+        if remote_url == '':
+            msg = '{} not found using gw_data_find. Trying targetted search.'
+            complain(msg.format(self))
+            try:
+                remote_url = self.remote_url_targeted_search()
+            except TargetedSearchException as e:
+                msg = 'Targeted search failed, returning "" for {}: {}'
+                complain(msg.format(self, e))
+                return ''
+        return remote_url
 
     def remote_sha256(self, remote_url=None):
         """Get the sha256 sum for the file specified in ``self.remote_url()``
@@ -341,14 +426,10 @@ class GWFrameQuery(object):
             remote_url = self.remote_url()
         remote_fullpath = RemoteFileInfo(remote_url).fullpath
         sha256cmd = self._SHA256_SUM_FMT.format(remote_fullpath)
-        cmd = ['gsissh', self.server, sha256cmd]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        res, err = proc.communicate()
-        if proc.returncode != 0:
+        try:
+            res, err = self.execute_cmd_over_ssh(sha256cmd,
+                                                 GWRemoteSha256Exception)
+        except GWRemoteSha256Exception:
             errtime = datetime.datetime.utcnow().isoformat()
             errfmt = "REMOTE_SHA256 ERROR at {}. STDERR: \n{}\n"
             errmsg = errfmt.format(errtime, err)
