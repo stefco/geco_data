@@ -30,8 +30,8 @@
 #
 # O1 Dates:
 # From https://wiki.ligo.org/LSC/JRPComm/ObsRun1
-# FROM Sep 12 2015 06:08:45 UTC (1126073342)
-# TO Oct 20 2015 13:32:03 UTC (1129383140)
+# ER8B? start   Sep 12th 0:00 UTC (GPS 1126051217) 
+# Switch from O1 data to post O1 Tues, Jan 19 11:07:59 AM CT (GPS 1137258496) 
 
 #--[ USER INPUT ]--
 
