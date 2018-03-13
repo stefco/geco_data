@@ -108,21 +108,25 @@ def calc_skymap_info(trigdict):
 def extract_coinc(gpstime, inputdb, trigdir):
     """Extract a single ``coinc.xml`` file to an output directory. Returns
     ``True`` if successful, ``False`` otherwise."""
+    inputdb_fullpath = os.path.realpath(inputdb)
     cmd = [
         'cody-gstlal_inspiral_coinc_extractor',
+        '--fap-thresh',
+        '1.0',
         '--gps-times',
         str(int(gpstime)),
-        inputdb
+        inputdb_fullpath
     ]
     complain(cmd)
     proc = Popen(cmd, cwd=trigdir, stdout=PIPE, stderr=PIPE)
     res, err = proc.communicate()
     if proc.returncode == 0:
+        complain("Successfully extracted coinc xml.")
         return True
     else:
-        fmt = ("Could not extract:\ngpstime:{}\ninputdb:{}\ntrigdir:{}"
-               "\nstderr:{}\nstdout:{}\n")
-        msg = fmt.format(gpstime, inputdb, trigdir, err, res)
+        fmt = ("Could not extract:\ngpstime:{}\ninputdb full path:{}"
+               "\ntrigdir:{}\nstderr:{}\nstdout:{}\n")
+        msg = fmt.format(gpstime, inputdb_fullpath, trigdir, err, res)
         complain(msg)
         return False
 
@@ -134,12 +138,15 @@ def extract_all(trigdict, inputdb, outdir):
     for i in range(len(trigdict['gpstimes'])):
         gpstime = trigdict['gpstimes'][i]
         far = trigdict['FAR'][i]
-        trigdir = os.path.join(outdir, str(int(gpstime)) + "_" + str(far))
-        os.mkdir(trigdir)
+        fmt = 'gstlal-offline-{:0=10d}_{:+.3e}'
+        trigdirname = fmt.format(int(gpstime), float(far))
+        trigdir = os.path.join(outdir, trigdirname)
+        if not os.path.isdir(trigdir):
+            os.mkdir(trigdir)
         extract_coinc(gpstime, inputdb, trigdir)
         jsonpath = os.path.join(trigdir, 'skymap_info.json')
         with open(jsonpath, 'w') as f:
-            json.dump(trigdict['skymap_info'][i], jsonpath)
+            json.dump(trigdict['skymap_info'][i], f, indent=2)
 
 def main():
     trigdict = tsv_to_dict(args.inputtable)
