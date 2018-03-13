@@ -138,6 +138,8 @@ def extract_all(trigdict, inputdb, outdir):
     for i in range(len(trigdict['gpstimes'])):
         gpstime = trigdict['gpstimes'][i]
         far = trigdict['FAR'][i]
+        # good format string documentation here:
+        # python-reference.readthedocs.io/en/latest/docs/functions/format.html
         fmt = 'gstlal-offline-{:0=10d}_{:+.3e}'
         trigdirname = fmt.format(int(gpstime), float(far))
         trigdir = os.path.join(outdir, trigdirname)
