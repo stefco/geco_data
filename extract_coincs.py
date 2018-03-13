@@ -37,11 +37,30 @@ if __name__ == "__main__":
             ``${outdir}/${gps_time}_${far}``.
         """
     )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        default=False,
+        help="""
+            Log warning messages to ``stderr``.
+        """
+    )
     args = parser.parse_args()
+    verbose = args.verbose
+else:
+    verbose = False
+import sys
+import os
 import json
 import numpy as np
 import astropy.time
-from subprocess import Popen
+from subprocess import Popen, PIPE
+
+def complain(msg):
+    """Write a message to stderr if the ``verbose`` flag has been specified."""
+    if verbose:
+        sys.stderr.write("{}\n".format(msg))
 
 def tsv_to_dict(infile):
     """input file must be a .tsv format file."""
@@ -87,15 +106,46 @@ def calc_skymap_info(trigdict):
     return trigdict
 
 def extract_coinc(gpstime, inputdb, trigdir):
-    # TODO implement
-    raise Exception('not implemented')
+    """Extract a single ``coinc.xml`` file to an output directory. Returns
+    ``True`` if successful, ``False`` otherwise."""
+    cmd = [
+        'cody-gstlal_inspiral_coinc_extractor',
+        '--gps-times',
+        str(int(gpstime)),
+        inputdb
+    ]
+    complain(cmd)
+    proc = Popen(cmd, cwd=trigdir, stdout=PIPE, stderr=PIPE)
+    res, err = proc.communicate()
+    if proc.returncode == 0:
+        return True
+    else:
+        fmt = ("Could not extract:\ngpstime:{}\ninputdb:{}\ntrigdir:{}"
+               "\nstderr:{}\nstdout:{}\n")
+        msg = fmt.format(gpstime, inputdb, trigdir, err, res)
+        complain(msg)
+        return False
 
-def extract_all_coincs(trigdict, inputdb, outdir):
-    # TODO implement
-    raise Exception('not implemented')
+def extract_all(trigdict, inputdb, outdir):
+    """Extract ``coinc.xml`` and ``skymap_info.json`` files for each trigger
+    specified in ``trigdict`` from the sqlite file ``inputdb`` and save them in
+    per-trigger directories contained in ``outdir`` following the name pattern
+    ``${outdir}/${gps_time}_${far}``."""
+    for i in range(len(trigdict['gpstimes'])):
+        gpstime = trigdict['gpstimes'][i]
+        far = trigdict['FAR'][i]
+        trigdir = os.path.join(outdir, str(int(gpstime)) + "_" + str(far))
+        os.mkdir(trigdir)
+        extract_coinc(gpstime, inputdb, trigdir)
+        jsonpath = os.path.join(trigdir, 'skymap_info.json')
+        with open(jsonpath, 'w') as f:
+            json.dump(trigdict['skymap_info'][i], jsonpath)
 
 def main():
     trigdict = tsv_to_dict(args.inputtable)
     calc_gps_times(trigdict)
     calc_skymap_info(trigdict)
-    # TODO finish implementing
+    extract_all(trigdict, args.inputdb, args.outdir)
+
+if __name__ == "__main__":
+    main()
