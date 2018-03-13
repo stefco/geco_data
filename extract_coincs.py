@@ -155,6 +155,7 @@ def main():
     calc_gps_times(trigdict)
     calc_skymap_info(trigdict)
     extract_all(trigdict, args.inputdb, args.outdir)
+    complain('Done extracting.')
 
 if __name__ == "__main__":
     main()
