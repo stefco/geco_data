@@ -27,14 +27,19 @@
 #   in GPS:                 1180982424
 # O2 end:                   Fri Aug 25 22:00:00 UTC 2017
 #   in GPS:                 1187733618
+#
+# O1 Dates:
+# From https://wiki.ligo.org/LSC/JRPComm/ObsRun1
+# ER8B? start   Sep 12th 0:00 UTC (GPS 1126051217) 
+# Switch from O1 data to post O1 Tues, Jan 19 11:07:59 AM CT (GPS 1137258496) 
 
 #--[ USER INPUT ]--
 
 # Set the start and end times for this dump in ISO Format
-STARTMONTH=06
-STARTYEAR=2017
-ENDMONTH=07
-ENDYEAR=2017
+STARTMONTH=11
+STARTYEAR=2016
+ENDMONTH=12
+ENDYEAR=2016
 
 # how many seconds of data in each frame?
 frame_length=4096
