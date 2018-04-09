@@ -2,20 +2,38 @@
 # (c) Stefan Countryman, 2016-2017
 
 import sys
+import datetime
+from textwrap import fill
 import numpy as np
 # import scipy.ndimage.filters as scf
-import datetime
 
-#-------------------------------------------------------------------------------
+if len(sys.argv) > 1:
+    print(
+        "Usage: {} <input_file.txt\n\n" +
+        fill(
+            """Read a raw IRIG-B signal from STDIN and print out decoded
+            timestamps.  Data must be a newline-delimited list of floating
+            point values representing the value of the IRIG-B signal at each
+            point in time.  Sample rate must be 16,384 (2^14) Hz. The input
+            file must contain an integer number of seconds worth of data, i.e.
+            it must have (Sample Rate) x (N) values, where N is the number of
+            seconds that must be decoded, and the data must start at the
+            beginning of a second.
+            """.format(sys.argv[0])
+        )
+    )
+    exit(1)
+
+# ------------------------------------------------------------------------------
 # CONSTANTS
-#-------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # max and min of histogram, and number of bins
 SAMPLE_RATE = 16384     # ADC sample rate
 
-#---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # IRIG-B RELATED CONSTANTS
-#---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 BITS_PER_SECOND = 100   # bits per second in IRIG-B spec
 CONVOLUTION_SIGMA = 1e-4
 HIGH_SIGNAL_THRESHOLD = 3500
@@ -30,9 +48,9 @@ BIT_STARTS = np.round(np.arange(0, 1, 1./BITS_PER_SECOND) * SAMPLE_RATE)
 ALL_TEST_POINT_INDICES = (BIT_STARTS[:, np.newaxis] + TEST_POINTS).astype(int)
 
 # representations of each type of bit (0, 1, or control)
-REP_0 = [1,0,0,0]
-REP_1 = [1,1,0,0]
-REP_C = [1,1,1,0]
+REP_0 = [1, 0, 0, 0]
+REP_1 = [1, 1, 0, 0]
+REP_C = [1, 1, 1, 0]
 CURRENT_CENTURY = 20
 
 # how many seconds does each bit represent?
