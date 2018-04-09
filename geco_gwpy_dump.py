@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 # (c) Stefan Countryman, Jan 2017
 
+"""
+Tools (with CLI) for downloading large batches of LIGO data (optionally
+including trend data) in an organized and restartable way.
+"""
+
 # allowed file extensions for GWPy writing to file, documented at:
 # https://gwpy.github.io/docs/v0.1/timeseries/index.html#gwpy.timeseries.TimeSeries.write
 NUM_THREADS = 6     # number of parallel download threads
@@ -79,7 +84,8 @@ a dictionary containing "start", "end", "channels", and "trends" key-value
 pairs. The "start" and "end" values must merely be readable by
 gwpy.timeseries.TimeSeries.get. The "channels" value is an array containing
 strings of valid ligo epics channels. The "trends" value is an array
-containing trend suffixes to use. For full data, use [""]. For all
+containing trend suffixes to use. For full data, use [""]. You can also just
+specify an empty trends list to download raw data (equivalent to [""]). For all
 available minute trends, use
 
     [
@@ -529,6 +535,11 @@ class Job(object):
         for key in ['start', 'end']:
             if isinstance(d[key], unicode):
                 d[key] = str(d[key])
+        # also let people specify raw data with an empty trends list (since
+        # this is reasonably intuitive behavior).
+        if 'trends' in kwargs:
+            if kwargs['trends'] == []:
+                kwargs['trends'] = [""]
         return cls(d['start'], d['end'], d['channels'], **kwargs)
     @classmethod
     def load(cls, jobspecfile='jobspec.json'):
