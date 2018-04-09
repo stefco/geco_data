@@ -36,16 +36,16 @@
 #--[ USER INPUT ]--
 
 # Set the start and end times for this dump in ISO Format
-STARTMONTH=11
-STARTYEAR=2015
-ENDMONTH=12
-ENDYEAR=2015
+STARTMONTH=12
+STARTYEAR=2016
+ENDMONTH=01
+ENDYEAR=2017
 
 # how many seconds of data in each frame?
 frame_length=4096
 
 # what server to download from?
-server=ldas-pcdev1.ligo.caltech.edu
+server=ldas-pcdev5.ligo.caltech.edu
 
 #--[ DERIVED QUANTITIES ]--
 
