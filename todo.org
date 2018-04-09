@@ -7,7 +7,22 @@
    CLOCK: [2017-10-04 Wed 10:29]--[2017-10-04 Wed 10:47] =>  0:18
    :END:
 
-** TODO Fix incorrect Cesium plot
+** ~geco_gwpy_dump~ improvements
+
+*** STARTED Add segment lists to output file list
+    :LOGBOOK:
+    CLOCK: [2017-10-04 Wed 17:55]--[2017-10-04 Wed 21:30] =>  3:35
+    :END:
+
+    Segment lists are used to figure out which time segments were good for
+    the detector. These should be considered output files to prevent redundant
+    downloading when unpacking an archived job. Since they are necessary for
+    any work involving a jobspec file anyway, you want to know whether they
+    are there, and it is thus important to list their status when the -o flag
+    is given. It is also therefore important to include them in the archive,
+    so that later data analysis can be performed offline.
+
+** STARTED Fix incorrect Cesium plot
 
    Used the wrong channel: ~H1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_2~
    is incorrect for LHO Cesium; use
@@ -159,20 +174,8 @@ comparator B channels are not connected to anything.
 
     Also back up files to ~research/archive/slow-channel-dumps~.
 
-*** STARTED Add segment lists to output file list
-    :LOGBOOK:
-    CLOCK: [2017-10-04 Wed 17:55]--[2017-10-04 Wed 21:30] =>  3:35
-    :END:
-
-    Segment lists are used to figure out which time segments were good for
-    the detector. These should be considered output files to prevent redundant
-    downloading when unpacking an archived job. Since they are necessary for
-    any work involving a jobspec file anyway, you want to know whether they
-    are there, and it is thus important to list their status when the -o flag
-    is given. It is also therefore important to include them in the archive,
-    so that later data analysis can be performed offline.
-
-*** STARTED Generate plots
+*** DONE Generate plots
+    CLOSED: [2017-10-05 Thu 15:59]
     :LOGBOOK:
     CLOCK: [2017-10-04 Wed 17:18]--[2017-10-04 Wed 23:53] =>  6:35
     :END:
@@ -185,15 +188,59 @@ comparator B channels are not connected to anything.
 
     Adding a new TODO item to fix this now.
 
-*** TODO Add a CLI to ~geco_slow_channel_plot~
-*** TODO Diagnose faults
-*** TODO Update Cesium document
+*** DONE Add a CLI to ~geco_slow_channel_plot~
+    CLOSED: [2017-10-05 Thu 15:59]
 
-**** TODO Describe faults
-**** TODO Update conclusion
-**** TODO Update plots in Cesium document
+    To be honest, a good amount of this was already done in another branch.
 
-*** TODO Send updated file to Zsuzsa
+*** DONE Diagnose faults
+    CLOSED: [2017-10-05 Thu 16:01]
+*** DONE Update Cesium document
+    CLOSED: [2017-10-05 Thu 16:52]
+    :LOGBOOK:
+    CLOCK: [2017-10-05 Thu 16:04]--[2017-10-05 Thu 16:52] =>  0:48
+    :END:
+
+**** DONE Describe faults
+     CLOSED: [2017-10-05 Thu 16:04]
+
+     Fortunately there were no faults. Only a spurious missing time at
+     hanford segment 218, as with the other channels.
+
+**** DONE Update metrics on LHO performance
+     CLOSED: [2017-10-05 Thu 16:50]
+**** DONE Update conclusion
+     CLOSED: [2017-10-05 Thu 16:50]
+
+     No longer need to say that LHO's superior performance is worth
+     investigating because apparently it isn't superior after all. Somewhat
+     better calibrated, but not qualitatively so. Similar order of
+     magnitude drift.
+
+**** DONE Update plots in Cesium document
+     CLOSED: [2017-10-05 Thu 16:52]
+
+*** DONE Send updated file to Zsuzsa
+    CLOSED: [2017-10-05 Thu 17:02]
 *** TODO Re-upload to DCC
   
+
+    Waiting on Zsuzsa's okay.
+
+**** STARTED Wait on Zsuzsa's clearance
+
+*** DONE Update ~geco_slow_channel_plot~ documentation
+    CLOSED: [2017-10-05 Thu 17:28]
+    :LOGBOOK:
+    CLOCK: [2017-10-05 Thu 17:03]--[2017-10-05 Thu 17:28] =>  0:25
+    :END:
+
+    Add a line about double checking with people on site.
+
+#+NAME: zsuzsa email
+#+BEGIN_SRC
+First of all, put in first line that get in touch with Keith and Dave at
+the sites to make sure that no cables were switched...
+#+END_SRC
+
 * Done
