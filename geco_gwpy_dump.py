@@ -96,7 +96,7 @@ available minute trends, use
         ".rms,m-trend"
     ]
 
-etc.
+etc. The DEFAULT ``trends`` value is: {}
 
 If an argument is given, that argument will be interpreted as the jobspec
 filepath.
@@ -117,7 +117,7 @@ If full data (rather than minute trends) is required, then the specified trend
 should be an empty string. This is the default behavior when no trends are
 provided.
 
-""".format(DEFAULT_EXTENSION, ALLOWED_EXTENSIONS) + """
+""".format(DEFAULT_TRENDS, DEFAULT_EXTENSION, ALLOWED_EXTENSIONS) + """
 An example jobspec.json file downloading all possible trend extensions for the
 minute trends:
 
@@ -184,11 +184,13 @@ if __name__ == '__main__':
     if '-f' in sys.argv:
         sys.argv.remove('-f')
         print_archive_filename = True
+
 # slow import; only import if we are going to use it.
 if not (__name__ == '__main__'
         and (check_progress or list_outfiles)):
     import gwpy.timeseries
     import gwpy.segments
+
 import gwpy.time
 import numpy as np
 import json
@@ -204,9 +206,11 @@ import logging
 import shutil
 import datetime
 
+
 class NDS2Exception(IOError):
     """An error thrown in association with some sort of failure to download
     data."""
+
 
 def indices_to_intervals(inds):
     """Takes a list of indices and turns it into a list of start/stop indices
@@ -239,34 +243,42 @@ def indices_to_intervals(inds):
     intervals = input_inds[all_inds]
     return intervals
 
+
 class Query(object):
     """A channel and timespan for a single NDS query and save operation."""
+
     def __init__(self, start, end, channel, ext):
         self.start      = start
         self.end        = end
         self.channel    = str(channel)
         self.ext        = ext
+
     @property
     def sanitized_channel(self):
         """get the channel name as used in filenames, i.e. with commas (,) and
         colons (:) replaced in order to fit filename conventions."""
         return sanitize_for_filename(self.channel)
+
     @property
     def fname(self):
         """get a filename for this particular timespan and channel"""
         return "{}__{}__{}.{}".format(self.start, self.end,
                                       self.sanitized_channel, self.ext)
+
     @property
     def fname_err(self):
-        """get the filename for any error output produced when failing to download
-        this channel to this file for this particular timespan."""
+        """get the filename for any error output produced when failing to
+        download this channel to this file for this particular timespan."""
         return self.fname + ".ERROR"
+
     def file_exists(self):
         """see if this file exists."""
         return os.path.isfile(self.fname)
+
     def query_failed(self):
         """check if this query failed by seeing if an fname_err file exists."""
         return os.path.isfile(self.fname_err)
+
     def get(self, **kwargs):
         """Fetch the timeseries corresponding to this Query from NDS2 or from
         frame files using GWpy."""
@@ -274,12 +286,14 @@ class Query(object):
                                               self.end, pad=DEFAULT_PAD,
                                               verbose=VERBOSE_GWPY,
                                               **kwargs)
+
     def fetch(self, **kwargs):
         """Get the timeseries corresponding to this Query explicitly from NDS2.
         There is no option to pad missing values using this method."""
         return gwpy.timeseries.TimeSeries.fetch(self.channel, self.start,
                                                 self.end, verbose=VERBOSE_GWPY,
                                                 **kwargs)
+
     def read(self, **kwargs):
         """Read this timeseries from file using GWpy. If the file is not
         present, an IOError is raised, UNLESS an unsuccessful attempt has been
@@ -289,8 +303,8 @@ class Query(object):
             return gwpy.timeseries.TimeSeries.read(self.fname, **kwargs)
         except IOError as e:
             if not self.query_failed():
-                msg = ('tried concatenating data, but a download attempt seems '
-                       'not to have been made for this query: {} See IOError '
+                msg = ('tried concatenating data, but a download attempt seems'
+                       ' not to have been made for this query: {} See IOError '
                        'message: {}').format(self, e)
                 logging.error(msg)
                 raise IOError(('Aborting concatenation. Neither an error log '
@@ -301,6 +315,7 @@ class Query(object):
                               '{}. Padding...').format(self))
                 raise NDS2Exception(('This query seems to have failed '
                                      'downloading: {}').format(self))
+
     @property
     def missing_gps_times(self, pad=DEFAULT_PAD):
         """Get a list of missing times for this query. These values are
@@ -308,6 +323,7 @@ class Query(object):
         t = self.read()
         missing_ind = np.nonzero(t == -1.)[0]
         return t.times[missing_ind].value
+
     def _get_missing_m_trend(self, pad='DEFAULT_PAD', **kwargs):
         """Get a single second of missing data."""
         logging.debug('Fetching missing m-trend: {}'.format(self))
@@ -332,13 +348,14 @@ class Query(object):
         else:
             raise ValueError('Unrecognized trend type: {}'.format(trend))
         return buf_trend
+
     def fill_in_missing_m_trend(self, pad='DEFAULT_PAD', **kwargs):
         """Missing m-trend data can often be filled in with s-trend data in
-        cases where the m-trend fails to generate for some reason. This function
-        takes a saved, completed query, loads the completely downloaded
-        timeseries from disk, identifies missing values, fetches the s-trend
-        for the missing minutes, generates m-trend values, and then saves the
-        filled-in timeseries to disk."""
+        cases where the m-trend fails to generate for some reason. This
+        function takes a saved, completed query, loads the completely
+        downloaded timeseries from disk, identifies missing values, fetches the
+        s-trend for the missing minutes, generates m-trend values, and then
+        saves the filled-in timeseries to disk."""
         buf = self.read()
         chan = buf.channel.name.split('.')
         # if this query is not a minute trend (m-trend), don't bother with
@@ -357,7 +374,8 @@ class Query(object):
         # download the s-trend 1 minute at a time
         for t in missing_times:
             full_trend = ','.join([trend, 's-trend'])
-            squery = type(self)(t, t+60, '.'.join([chan, full_trend]), self.ext)
+            squery = type(self)(t, t+60, '.'.join([chan, full_trend]),
+                                self.ext)
             buf_trend = squery._get_missing_m_trend(pad=pad, **kwargs)
             # replace missing value in loaded trend data
             missing_ind = np.argwhere(buf.times.value == t)[0][0]
@@ -366,6 +384,7 @@ class Query(object):
             if os.path.isfile(self.fname):
                 os.remove(self.fname)
             buf.write(self.fname)
+
     def read_and_split_on_missing(self, pad=DEFAULT_PAD, invert=False,
                                   **kwargs):
         """Read this timeseries from file using .read(), then find missing
@@ -380,6 +399,7 @@ class Query(object):
         for i in range(len(intervals) // 2):
             timeseries.append(t[intervals[2*i]:intervals[2*i+1]+1])
         return timeseries
+
     @property
     def trend(self):
         """Get the trend extension for this query by splitting the channel
@@ -390,12 +410,14 @@ class Query(object):
             return ''
         else:
             return self.channel.split('.')[1]
+
     @property
     def channel_sans_trend(self):
         """Get the channel name with any trend extension, e.g.
         ``'.mean,m-trend'``, removed; this is the channel name as it should
         appear in a ``Job`` specification."""
         return self.channel.split('.')[0]
+
     def read_and_split_into_segments(self, dq_flag_segments):
         """Read this timeseries from file using ``.read()`` and split it into
         a list of subintervals that overlap with the provided
@@ -416,7 +438,8 @@ class Query(object):
             # forcing this stupid kludgy conversion.
             start = gwpy.time.to_gps(seg.start).gpsSeconds
             end = gwpy.time.to_gps(seg.end).gpsSeconds
-            # the start index for this segment might be outside the full timeseries
+            # the start index for this segment might be outside the full
+            # timeseries
             try:
                 i_start = np.argwhere(t.times.value==(start // 60 * 60))[0][0]
             except IndexError:
@@ -424,7 +447,8 @@ class Query(object):
                 msg = INDEX_MISSING_FMT.format('Start', i_seg, n_segs,
                                                start, 'start', i_start)
                 logging.info(msg)
-            # the end index for this segment might be outside the full timeseries
+            # the end index for this segment might be outside the full
+            # timeseries
             try:
                 i_end = np.argwhere(t.times.value==(end // 60 * 60 + 60))[0][0]
             except IndexError:
@@ -435,15 +459,19 @@ class Query(object):
                 logging.info(msg)
             t_subintervals.append(t[i_start:i_end+1])
         return t_subintervals
+
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
+
     def __str__(self):
         fmt = "start: {}, end: {}, channel: {}, ext: {}"
         return fmt.format(self.start, self.end, self.channel, self.ext)
+
     def __repr__(self):
         fmt = type(self).__name__ + '(start={}, end={}, channel={}, ext={})'
         return fmt.format(repr(self.start), repr(self.end),
                           repr(self.channel), repr(self.ext))
+
     # must be a staticmethod so that we can use multiprocessing on it
     @staticmethod
     def _download_data_if_missing(query, getmethod='get'):
@@ -464,7 +492,9 @@ class Query(object):
                     data = query.fetch()
                 else:
                     raise ValueError("``getmethod`` must be 'get' or 'fetch'.")
-                logging.info("query succeeded: {} saving to file".format(query))
+                logging.info(
+                    "query succeeded: {} saving to file".format(query)
+                )
                 data.write(query.fname)
             except RuntimeError as e:
                 logging.warn(("Error while downloading {} from {} to {}: "
@@ -472,15 +502,18 @@ class Query(object):
                                            query.end, e))
                 with open(query.fname_err, 'w') as f:
                     f.write('Download failed: {}'.format(e))
+
     def download_data_if_missing(self, getmethod='get'):
         """download missing data if necessary. the query contains start, end,
         channel name, and file extension information in the following format:
             [ [start, end], channel, ext ]"""
         _download_data_if_missing(self, getmethod=getmethod)
 
+
 def _download_data_if_missing(query, getmethod='get'):
     """Must define this at Global level to allow for multiprocessing"""
     Query._download_data_if_missing(query, getmethod=getmethod)
+
 
 class Job(object):
     """A description of a data downloading job. Contains information on which
@@ -493,7 +526,8 @@ class Job(object):
                  max_chunk_length=DEFAULT_MAX_CHUNK, filename=None):
         """Start and end times can be specified as either integer GPS times or
         as human-readable time strings that are parsable by gwpy.time.to_gps.
-        max_chunk_length is measured in seconds and must be a multiple of 60."""
+        max_chunk_length is measured in seconds and must be a multiple of 60.
+        """
         if not set(exts).issubset(ALLOWED_EXTENSIONS):
             raise ValueError(('Must pick saved data file extension from: '
                               '{}').format(ALLOWED_EXTENSIONS))
@@ -520,6 +554,7 @@ class Job(object):
         else:
             self.start = self.start
             self.end   = self.end
+
     @classmethod
     def from_dict(cls, d):
         """Instantiate a Job from a dictionary. Optional keyword arguments
@@ -541,6 +576,7 @@ class Job(object):
             if kwargs['trends'] == []:
                 kwargs['trends'] = [""]
         return cls(d['start'], d['end'], d['channels'], **kwargs)
+
     @classmethod
     def load(cls, jobspecfile='jobspec.json'):
         """load this job from a job specification file, assumed to be formatted
@@ -549,6 +585,7 @@ class Job(object):
             job = cls.from_dict(json.load(f))
             job.filename = jobspecfile
             return job
+
     def to_dict(self):
         """Return a dict representing this job. Filename information is not
         included."""
@@ -559,11 +596,13 @@ class Job(object):
                  'dq_flags':            self.dq_flags,
                  'trends':              self.trends,
                  'max_chunk_length':    self.max_chunk_length }
+
     def save(self, jobspecfile):
         """Write this job specification to a JSON file named
         ``jobspecfile``."""
         with open(jobspecfile, 'w') as f:
             json.dump(self.to_dict(), f, sort_keys=True, indent=2)
+
     def overwrite(self):
         """Write this job specification to the same JSON file that it was
         loaded from (or whatever the current value of the job's ``filename``
@@ -590,8 +629,8 @@ class Job(object):
         ``max_chunk_length`` in duration and return that list of subintervals.
         returns a list of [start, stop] pairs."""
         mchunk = self.max_chunk_length
-        # do we start and end cleanly at the start of a new chunk (in gps time)?
-        # measured in number of time chunks since GPS time 0.
+        # do we start and end cleanly at the start of a new chunk (in gps
+        # time)? measured in number of time chunks since GPS time 0.
         end_first_chunk = int(math.ceil(self.start / float(mchunk)))
         start_last_chunk = int(self.end // mchunk)
         # if this is all happening in the same chunk, no splitting needed
@@ -626,9 +665,9 @@ class Job(object):
     @property
     def full_queries(self):
         """Return a list of Queries corresponding to each channel/trend
-        combination. The full time interval for this job is used for each Query;
-        it is not split into smaller subintervals, so this list of Queries is
-        probably useless for fetching remote data."""
+        combination. The full time interval for this job is used for each
+        Query; it is not split into smaller subintervals, so this list of
+        Queries is probably useless for fetching remote data."""
         return [ Query(start = j.start, end = j.end,
                        channel = j.channels_with_trends[0], ext = j.exts[0])
                      for j in self.joblets ]
@@ -661,9 +700,10 @@ class Job(object):
         fmt = (type(self).__name__
                + '(start={}, end={}, channels={}, exts={}, dq_flags={}, '
                +  'trends={}, max_chunk_length={})')
-        return fmt.format(repr(self.start), repr(self.end), repr(self.channels),
-                          repr(self.exts), repr(self.dq_flags),
-                          repr(self.trends), repr(self.max_chunk_length))
+        return fmt.format(repr(self.start), repr(self.end),
+                          repr(self.channels), repr(self.exts),
+                          repr(self.dq_flags), repr(self.trends),
+                          repr(self.max_chunk_length))
     @property
     def output_filenames(self):
         """Get the filenames for all final output files created by this job
@@ -703,6 +743,7 @@ class Job(object):
                 if not full_query.file_exists():
                     data.write(full_query.fname)
                 logging.debug('done concatenating: {}'.format(full_query))
+
     def fill_in_missing_m_trend(self):
         """Iterate through channel and trend extension combinations and fill in
         missing data due to malformed minute trends. This should ONLY be run
@@ -712,9 +753,11 @@ class Job(object):
         for q in self.full_queries:
             logging.info('Filling in missing m-trend values for {}'.format(q))
             q.fill_in_missing_m_trend()
+
     @property
     def is_finished(self):
         return all([q.file_exists() for q in self.full_queries])
+
     def current_progress(self):
         """Print out current progress of this download."""
         print('{}Checking progress on job{}: {}'.format(_GREEN, _CLEAR,
@@ -747,6 +790,7 @@ class Job(object):
         summary_fmt = '{}SUMMARY{}:\n{}% done\n{}% failed\n{}% remains'
         print(summary_fmt.format(_GREEN, _CLEAR, successful_percentage,
                                  failed_percentage, in_progress_percentage))
+
     def list_outfiles(self):
         """List output filenames (i.e. the files that should be produced once
         all data in the jobspec are downloaded and concatenated) and whether
@@ -759,11 +803,13 @@ class Job(object):
             else:
                 exists = does_not_exist
             print('{} -> {}'.format(exists, f))
+
     @property
     def output_filenames_sha(self):
         """Get the sha256 sum of the output filenames. Used for handily
         labeling collections of output files for this jobspec."""
         return hashlib.sha256('\n'.join(self.output_filenames)).hexdigest()
+
     @property
     def output_archive_filename(self):
         """Get a filename for a .tar.gz archive that the output of this jobspec
@@ -771,6 +817,7 @@ class Job(object):
         sum and should therefore with high probability be unique for a given
         jobspec."""
         return "jobarchive_{}.tar.gz".format(self.output_filenames_sha)
+
     def output_archive(self):
         """Archive output files into a single file whose name is uniquely based
         on the contents of the jobspec for easy transport and later retrieval.
@@ -800,6 +847,7 @@ class Job(object):
             else:
                 archive.add(os.path.realpath(self.filename),
                             arcname='jobspec.json')
+
     def output_unarchive(self, archive_filename=None):
         """Unarchive the output files for this job. Looks for an archive file
         whose name is uniquely based on the output files of this job and
@@ -818,6 +866,7 @@ class Job(object):
                 if os.path.exists(output_file):
                     raise IOError('GWpy dump output file exists, aborting.')
                 archive.extract(output_file)
+
     @classmethod
     def job_unarchive(cls, archive_filename, check_archive_filename=True):
         """Unarchive a jobspec file as well as its entire collection of output
@@ -842,16 +891,19 @@ class Job(object):
         if check_archive_filename:
             archive_filename = job.output_archive_filename
         job.output_unarchive(archive_filename)
+
     @property
     def segment_filename(self):
         """The filename of HDF5 file that holds the segments specified in this
         job (and any other job with the same start and end)."""
         return "{}-{}-segments.hdf5".format(self.start, self.end)
+
     def fetch_dq_segments(self):
         """Download data quality segments into a gwpy.DataQualityDict using
         that class's ``query`` method for the full timespan of this job."""
         return gwpy.segments.DataQualityDict.query(self.dq_flags, self.start,
                                                    self.end)
+
     def read_dq_segments(self):
         """Read the segments for this job from an HDF5 file, throwing an
         IOError if not all DataQualityFlags are present in the saved file."""
@@ -864,6 +916,7 @@ class Job(object):
             return segs
         else:
             raise IOError('Not all DataQualityFlags present for this job.')
+
     def get_dq_segments(self):
         """Download data quality segments and save them to an HDF5 formatted
         file. If that file already exists and has all required segments,
@@ -899,6 +952,7 @@ class Job(object):
             segs.pop(extraneous_key)
         return segs
 
+
 def _run_queries(job, multiproc=False, getmethod='get'):
     """Try to download all data, i.e. run all queries. Can use multiple
     processes to try to improve I/O performance, though by default, only
@@ -912,6 +966,7 @@ def _run_queries(job, multiproc=False, getmethod='get'):
     mapf(functools.partial(_download_data_if_missing, **kwargs), job.queries)
     logging.info('done downloading data.')
 
+
 def sanitize_for_filename(string):
     """Take some string and return a sanitized filename with offensive
     characters (colons and commas) replaced with innocuous characters.
@@ -920,6 +975,7 @@ def sanitize_for_filename(string):
     channels and DQ flag names, which only colons and commas as non-standard
     characters for filenames."""
     return string.replace(':', '..').replace(',', '--')
+
 
 if __name__ == '__main__':
     # if we are unarchiving an entire job and it's output, then there is no
