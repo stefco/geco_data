@@ -8,7 +8,8 @@ including trend data) in an organized and restartable way.
 
 # allowed file extensions for GWPy writing to file, documented at:
 # https://gwpy.github.io/docs/v0.1/timeseries/index.html#gwpy.timeseries.TimeSeries.write
-NUM_THREADS = 6     # number of parallel download threads
+NUM_THREADS = 6  # number of parallel download threads
+MULTIPROC = True  # whether to parallelize downloads
 VERBOSE_GWPY = True
 ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
 DEFAULT_EXTENSION = ['hdf5']
@@ -78,6 +79,11 @@ archive file exists or not, since this filename is based purely on the
 jobspec):
 
     geco_gwpy_dump -f
+
+Run downloads in a single thread with the ``-s`` flag (useful for debugging).
+By default, this script uses multiprocessing to paralellize downloads.
+
+    geco_gwpy_dump -s
 
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
@@ -184,6 +190,9 @@ if __name__ == '__main__':
     if '-f' in sys.argv:
         sys.argv.remove('-f')
         print_archive_filename = True
+    if '-s' in sys.argv:
+        sys.argv.remove('-s')
+        MULTIPROC = False 
 
 # slow import; only import if we are going to use it.
 if not (__name__ == '__main__'
@@ -521,6 +530,7 @@ class Job(object):
     should be downloaded, and which data quality (dq) flags should be
     downloaded. Provides methods for safely downloading required data in chunks
     and filling in missing values."""
+
     def __init__(self, start, end, channels, exts=DEFAULT_EXTENSION,
                  dq_flags=DEFAULT_FLAGS, trends=DEFAULT_TRENDS,
                  max_chunk_length=DEFAULT_MAX_CHUNK, filename=None):
@@ -613,16 +623,19 @@ class Job(object):
         before overwriting the old file.
         """
         self.save(self.filename)
+
     @property
     def job_sha(self):
         """Get the sha256 checksum of this job (as represented in its canonical
         JSON format with sorted keys and no indentation)."""
         return hashlib.sha256(json.dumps(self.to_dict(),
                                          sort_keys=True)).hexdigest()
+
     @property
     def duration(self):
         """Get the duration of this job in seconds."""
         return self.end - self.start
+
     @property
     def subspans(self):
         """split the time interval into subintervals that are each up to the
@@ -644,6 +657,7 @@ class Job(object):
         if self.end != start_last_chunk * mchunk:
             spans.append([start_last_chunk * mchunk, self.end])
         return spans
+
     @property
     def channels_with_trends(self):
         """get all combinations of channels and trend extensions in this job.
@@ -654,6 +668,7 @@ class Job(object):
                     for t in self.trends   ]
         logging.debug('all channels: {}'.format(chans))
         return chans
+
     @property
     def queries(self):
         """Return a list of Queries that are necessary to execute this job."""
@@ -662,6 +677,7 @@ class Job(object):
                     for chan in self.channels_with_trends
                     for span in self.subspans 
                     for ext  in self.exts ]
+
     @property
     def full_queries(self):
         """Return a list of Queries corresponding to each channel/trend
@@ -681,21 +697,26 @@ class Job(object):
                     for chan in self.channels
                     for ext in self.exts
                     for trend in self.trends ]
+
     @property
     def start_iso(self):
         """An ISO timestring of the start time of this job."""
         return gwpy.time.tconvert(self.start).isoformat()
+
     @property
     def end_iso(self):
         """An ISO timestring of the end time of this job."""
         return gwpy.time.tconvert(self.end).isoformat()
+
     def run_queries(self, getmethod='get'):
         """Try to download all data, i.e. run all queries. Can use multiple
         processes to try to improve I/O performance, though by default, only
         runs in a single process."""
         _run_queries(self, multiproc=False, getmethod=getmethod)
+
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
+
     def __repr__(self):
         fmt = (type(self).__name__
                + '(start={}, end={}, channels={}, exts={}, dq_flags={}, '
@@ -704,11 +725,13 @@ class Job(object):
                           repr(self.channels), repr(self.exts),
                           repr(self.dq_flags), repr(self.trends),
                           repr(self.max_chunk_length))
+
     @property
     def output_filenames(self):
         """Get the filenames for all final output files created by this job
         (after concatenation of timeseries)."""
         return [ q.fname for q in self.full_queries ]
+
     def concatenate_files(self):
         """Once all data has been downloaded for a job, concatenate that data
         based on the extension specified for the job."""
@@ -1028,7 +1051,7 @@ if __name__ == '__main__':
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))
     logging.debug('all queries: {}'.format(job.queries))
-    _run_queries(job, multiproc=True)
+    _run_queries(job, multiproc=MULTIPROC)
     logging.debug('finished downloading data. concatenating files...')
     job.concatenate_files()
     logging.debug('finished concatenating files. filling in missing values...')
