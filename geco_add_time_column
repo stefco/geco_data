@@ -1,0 +1,28 @@
+#!/usr/bin/env python
+# (c) Stefan Countryman 2018
+
+"""
+Add a time column to a timeseries.
+"""
+
+import argparse
+import sys
+
+DESC = """Read an input list of newline-delimited values from STDIN and write
+them to STDOUT as a CSV-formatted table where the 1st column is the time and
+the 2nd column is the value of the input timeseries at that time.
+"""
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=DESC)
+    parser.add_argument("-s", "--starttime", type=float,
+                        help="The GPS time of the first datapoint.")
+    parser.add_argument("-b", "--bitrate", type=int,
+                        help="The bitrate in [Hz] of the timeseries.")
+    args = parser.parse_args()
+    gpstime = args.starttime
+    deltat = 1. / args.bitrate
+    for line in sys.stdin:
+        print('{}, {}'.format(gpstime, line))
+        gpstime += deltat
