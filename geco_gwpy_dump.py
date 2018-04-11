@@ -10,6 +10,9 @@ including trend data) in an organized and restartable way.
 # https://gwpy.github.io/docs/v0.1/timeseries/index.html#gwpy.timeseries.TimeSeries.write
 NUM_THREADS = 6  # number of parallel download threads
 MULTIPROC = True  # whether to parallelize downloads
+# by default, use ``get``, which tries to find data in frame files and falls
+# back to NDS2. defining it as 'fetch' will force it to use NDS2.
+GETMETHOD = 'get'
 VERBOSE_GWPY = True
 ALLOWED_EXTENSIONS = ["csv", "framecpp", "hdf", "hdf5", "txt"]
 DEFAULT_EXTENSION = ['hdf5']
@@ -84,6 +87,11 @@ Run downloads in a single thread with the ``-s`` flag (useful for debugging).
 By default, this script uses multiprocessing to paralellize downloads.
 
     geco_gwpy_dump -s
+
+Force the script to try to download data from NDS2 (even if frame files are
+available) with the ``-N`` flag:
+
+    geco_gwpy_dump -N
 
 Look for a file in the current directory called "jobspec.json", which is
 a dictionary containing "start", "end", "channels", and "trends" key-value
@@ -193,6 +201,9 @@ if __name__ == '__main__':
     if '-s' in sys.argv:
         sys.argv.remove('-s')
         MULTIPROC = False 
+    if '-N' in sys.argv:
+        sys.argv.remove('-N')
+        GETMETHOD = 'fetch'
 
 # slow import; only import if we are going to use it.
 if not (__name__ == '__main__'
@@ -1051,7 +1062,7 @@ if __name__ == '__main__':
     logging.debug('job after gps conversion: {}'.format(job.to_dict()))
     logging.debug('all spans: {}'.format(job.subspans))
     logging.debug('all queries: {}'.format(job.queries))
-    _run_queries(job, multiproc=MULTIPROC)
+    _run_queries(job, multiproc=MULTIPROC, getmethod=GETMETHOD)
     logging.debug('finished downloading data. concatenating files...')
     job.concatenate_files()
     logging.debug('finished concatenating files. filling in missing values...')
