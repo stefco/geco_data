@@ -2,7 +2,7 @@
 # (c) Stefan Countryman, 2017
 
 usage(){
-    echo "Find corrupt frame files downloaded by get_whole_frame_files.py in"
+    echo "Find corrupt frame files downloaded by geco_fetch_frame_files.py in"
     echo "the current directory. Prints nothing if all downloaded GWF files"
     echo "are intact. Works by comparing the local and remote sha256 sums."
     echo "Good for detecting corruption due to file system problems or,"

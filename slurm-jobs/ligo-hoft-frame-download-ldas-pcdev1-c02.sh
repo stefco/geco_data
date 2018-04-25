@@ -79,7 +79,7 @@ else
     echo "not authenticating."
 fi
 
-get_whole_frame_files.py "$@" \
+geco_fetch_frame_files.py "$@" \
     --start                 "${start}" \
     --deltat                "${deltat}" \
     --outdir                "${outdir}" \
