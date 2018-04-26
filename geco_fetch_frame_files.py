@@ -34,9 +34,22 @@ for run in ["O1", "O2"]:
 
 # all other imports listed after argument parsing, allowing for fast help
 # documentation printing.
+import sys
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
+    parser.add_argument(
+        "-T",
+        "--times",
+        action="store_true",
+        help="""
+            If provided, {} will read a list of (start, stop) times from STDIN
+            and will attempt to download frames for these time intervals
+            (instead of time intervals specified by the ``--start`` and
+            ``--deltat`` arguments, which are ignored if ``--times`` is
+            specified).
+        """.format(sys.argv[0])
+    )
     parser.add_argument(
         "-t",
         "--start",
@@ -137,33 +150,40 @@ import collections
 import subprocess
 import datetime
 import time
-import sys
 import os
+
 
 class GWDataFindException(Exception):
     """An error thrown when ``gw_data_find`` on the remote server fails."""
 
+
 class GWDataDownloadException(Exception):
     """An error thrown when ``gsiscp`` fails to download the desired data."""
+
 
 class GWRemoteSha256Exception(Exception):
     """An error thrown when ``sha256sum`` fails on the remote server."""
 
+
 class GWLocalSha256Exception(Exception):
     """An error thrown when ``sha256sum`` fails locally."""
+
 
 class FileNameParsingError(Exception):
     """An error thrown when a filename that must be parsed does not follow the
     expected format. The message should contain some information about the
     unparsable filename to aid in debugging."""
 
+
 class TargetedSearchException(Exception):
     """An exception raised when a targeted search cannot be performed due to a
     lack of target directories."""
 
+
 def time_since_file_modified(filename):
     """Get the elapsed time in seconds since a file was modified."""
     return time.time() - os.path.getmtime(filename)
+
 
 def complain(msg):
     """Write a message to stderr if running in interactive mode or if the
@@ -173,6 +193,7 @@ def complain(msg):
     fmt = "---[{}]---\n{}\n"
     formatted_message = fmt.format(datetime.datetime.now().isoformat(), msg)
     sys.stderr.write(formatted_message)
+
 
 class RemoteFileInfo(object):
     """A container holding data about a remote frame file (based on its
@@ -184,20 +205,25 @@ class RemoteFileInfo(object):
     file://localhost/hdfs/frames/O2/hoft_C02/H1/H-H1_HOFT_C02-11869/H-H1_HOFT_C02-1186959360-4096.gwf
 
     """
+
     def __init__(self, gw_data_find_response):
         """Initialize using the ``gw_data_find`` file URL string. Strips
         surrounding whitespace from the remote filename."""
         self.gw_data_find_response = gw_data_find_response.strip()
+
     FILE_URL_PREFIX = "file://localhost"
+
     @property
     def fullpath(self):
         """Return the full path on the remote server (removing the
         "file://localhost" prefix from the response string)."""
         return self.gw_data_find_response.replace(self.FILE_URL_PREFIX, '')
+
     @property
     def filename(self):
         """Get the remote filename without the containing directory."""
         return os.path.basename(self.fullpath)
+
     @property
     def gps_start_time(self):
         """Get the GPS start time of this frame file."""
@@ -207,6 +233,7 @@ class RemoteFileInfo(object):
             msg = 'Cannot get GPS start time from filename: ' + self.filename
             complain(msg)
             raise FileNameParsingError(msg)
+
     @property
     def frame_duration(self):
         """Get the duration in seconds of this frame file."""
@@ -217,20 +244,22 @@ class RemoteFileInfo(object):
             complain(msg)
             raise FileNameParsingError(msg)
 
+
 class GWFrameQuery(object):
     """An object specifying the detector, frametype, frame start time, output
     directory, and server where remote data is stored for a GW frame.  Used to
     check if the frame file exists, and, if it doesn't, to find the file on a
     remote server and download it."""
+
     def __init__(self, detector, frametype, gpstime,
                  framelength=DEFAULT_FRAME_LENGTH, server=DEFAULT_SERVER,
                  outdir=DEFAULT_OUTDIR):
-        self.detector    = detector
-        self.frametype   = frametype
-        self.gpstime     = gpstime
+        self.detector = detector
+        self.frametype = frametype
+        self.gpstime = gpstime
         self.framelength = framelength
-        self.server      = server
-        self.outdir      = outdir
+        self.server = server
+        self.outdir = outdir
 
     _FILENAME_FORMAT = '{}-{}-{}-{}.gwf'
 
@@ -575,6 +604,7 @@ class GWFrameQuery(object):
             self.outdir
         )
 
+
 def get_times(start, deltat, frlength):
     """Get a list of start times for frame files based on in initial starting
     time, ``start``, and a specified length of time, ``deltat``. The initial
@@ -594,6 +624,7 @@ def get_times(start, deltat, frlength):
         start + deltat + frlength,
         frlength
     )
+
 
 def get_queries(
         start,
@@ -639,6 +670,7 @@ def get_queries(
                         for t in get_times(start, deltat, length)]
     return queries
 
+
 def check_progress(queries):
     """Return a dictionary of lists of queries, where the keys of the
     dictionary indicate the status of each query."""
@@ -681,6 +713,7 @@ def check_progress(queries):
                 status['not_started'].append(query)
     return status
 
+
 def display_progress(status):
     """Print how much progress has been made so far."""
     total_q = len(status['all_queries'])
@@ -690,16 +723,50 @@ def display_progress(status):
         percent = (100.0 * number_of_queries) / total_q
         print(fmt.format(key, number_of_queries, total_q, percent))
 
+
+def read_starts_and_deltats(infile):
+    """Read ``start`` times and ``deltat`` values from an ``infile``, e.g.
+    ``sys.stdin``.
+
+    Returns
+    -------
+
+    ``times``   A list of ``(start, deltat)`` tuples, where ``start`` and
+                ``deltat`` are times of the format expected by ``get_queries``.
+
+    Arguments
+    ---------
+
+    ``infile``  A ``fileobj`` with one space-separated pair of (start, stop)
+                times on each line (indicating the time intervals that should
+                be downloaded).
+    """
+    start_stops = [l.split() for l in infile.readlines()]
+    return [(int(start), int(stop)-int(start)) for start, stop in start_stops]
+
+
 def main(args):
-    queries = get_queries(
-        args.start,
-        args.deltat,
-        args.length,
-        server=args.server,
-        outdir=args.outdir,
-        h_frametypes=args.hanford_frametypes,
-        l_frametypes=args.livingston_frametypes,
-        v_frametypes=args.virgo_frametypes
+    if args.times:
+        times = read_starts_and_deltats(sys.stdin)
+    elif args.start and args.deltat:
+        times = [(args.start, args.deltat)]
+    else:
+        raise ValueError("Must provide either ``times`` or both of ``start`` "
+                         "and ``deltat``.")
+    queries = sum(
+        [
+            get_queries(
+                start=start,
+                deltat=deltat,
+                length=args.length,
+                server=args.server,
+                outdir=args.outdir,
+                h_frametypes=args.hanford_frametypes,
+                l_frametypes=args.livingston_frametypes,
+                v_frametypes=args.virgo_frametypes
+            ) for start, deltat in times
+        ],
+        list()
     )
     if args.progress:
         display_progress(check_progress(queries))
@@ -708,7 +775,7 @@ def main(args):
             if not query.estimated_fullpath_exists():
                 try:
                     query.download()
-                except FileNameParsingError as e:
+                except FileNameParsingError:
                     complain('Filename parse error, skipping:\n' + repr(query))
 
 if __name__ == "__main__":
