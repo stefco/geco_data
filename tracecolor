@@ -1,0 +1,39 @@
+#!/bin/bash
+# (c) Stefan Countryman, 2017
+# Add color to python stack traces
+
+# define expressions we will look for in `sed`
+exp[0]='File "[^"]*/'
+exp[1]='[^"^/]*'          # color the actual python file basename
+exp[2]='", line '
+exp[3]='[0-9]*'     # color the line number
+exp[4]=', in '
+exp[5]='[^ ]*'     # color the function name
+
+# escape the patterns so that we can number them in `sed`
+# for i in seq ${#exp[@]}; do
+    # exp[i-1]='\('"${exp[i-1]}"'\)'
+# done
+
+# put the whole search pattern together
+pattern=''
+for e in "${exp[@]}"; do
+    pattern+='\('"${e}"'\)'
+done
+#echo PATTERN:
+#echo "${pattern}"
+
+# define colors
+# from http://linux.101hacks.com/ps1-examples/prompt-color-using-tput/
+RED="$(tput setaf 1)"
+MAGENTA="$(tput setaf 5)"
+CYAN="$(tput setaf 6)"
+RESET="$(tput sgr0)"
+
+# define replacement pattern
+replace="\1${RED}\2${RESET}\3${MAGENTA}\4${RESET}\5${CYAN}\6${RESET}"
+#echo REPLACE:
+#echo "${replace}"
+
+# run STDIN through `sed`
+sed "s_${pattern}_${replace}_"
