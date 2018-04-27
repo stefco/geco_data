@@ -4,6 +4,7 @@
 DESC = """Find all frame files of a given frame type in a given time range on
 a remote LIGO server and download them to the specified output directory,
 skipping any files that have already been downloaded."""
+PROG_BAR_WIDTH = 20
 DEFAULT_H_FRAMETYPES = []
 DEFAULT_L_FRAMETYPES = []
 DEFAULT_V_FRAMETYPES = []
@@ -31,10 +32,14 @@ for run in ["O1", "O2"]:
                 _TARGETED_SEARCH_FRAMETYPE_DICT_CIT[frametype]
             )
             _TARGETED_SEARCH_DIRECTORIES[key] = path
+_BLUE = '\033[94m'
+_CLEAR = '\033[0m'
+_COMPLAINT = "{}---[{{}}]---{}\n{{}}\n".format(_BLUE, _CLEAR)
 
 # all other imports listed after argument parsing, allowing for fast help
 # documentation printing.
 import sys
+from subprocess import Popen, PIPE
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
@@ -53,7 +58,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t",
         "--start",
-        required=True,
         type=int,
         help="""
             The starting GPS time for this dump. Will be rounded down to the
@@ -83,7 +87,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d",
         "--deltat",
-        required=True,
         type=int,
         help="""
             The length of the time window in which to seek frame files,
@@ -142,13 +145,21 @@ if __name__ == "__main__":
             {}
             """.format(DEFAULT_V_FRAMETYPES)
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print diagnostic information to STDERR."
+    )
     args = parser.parse_args()
+    _PIPE_ARGS = {"stdout": PIPE, "stderr": PIPE}
+    if args.verbose:  # if verbose, print everything
+        _PIPE_ARGS = {"stdout": PIPE}
 
 import filecmp
 import numpy as np
 import collections
-import subprocess
-import datetime
+from datetime import datetime
 import time
 import os
 
@@ -185,14 +196,14 @@ def time_since_file_modified(filename):
     return time.time() - os.path.getmtime(filename)
 
 
-def complain(msg):
+def complain(*messages):
     """Write a message to stderr if running in interactive mode or if the
-    ``--verbose`` flag is set. Otherwise, throw away the message."""
-    #TODO add actual verbosity flag. For now, just always log messages to
-    # stderr.
-    fmt = "---[{}]---\n{}\n"
-    formatted_message = fmt.format(datetime.datetime.now().isoformat(), msg)
-    sys.stderr.write(formatted_message)
+    ``--verbose`` flag is set. Otherwise, throw away the message. If multiple
+    messages are provided, join them with newlines."""
+    msg = '\n'.join([format(m) for m in messages])
+    if args.verbose:
+        formatted_message = _COMPLAINT.format(datetime.now().isoformat(), msg)
+        sys.stderr.write(formatted_message)
 
 
 class RemoteFileInfo(object):
@@ -288,11 +299,7 @@ class GWFrameQuery(object):
         returning a tuple containing (stdout, stderr) and throwing the
         specified ``exception`` type in the event of a nonzero return code."""
         fullcmd = ['gsissh', self.server, cmd]
-        proc = subprocess.Popen(
-            fullcmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+        proc = Popen(fullcmd, stdout=PIPE, stderr=PIPE)
         res, err = proc.communicate()
         if proc.returncode != 0:
             raise exception("Something went wrong: {}".format(err))
@@ -460,7 +467,7 @@ class GWFrameQuery(object):
             res, err = self.execute_cmd_over_ssh(sha256cmd,
                                                  GWRemoteSha256Exception)
         except GWRemoteSha256Exception:
-            errtime = datetime.datetime.utcnow().isoformat()
+            errtime = datetime.utcnow().isoformat()
             errfmt = "REMOTE_SHA256 ERROR at {}. STDERR: \n{}\n"
             errmsg = errfmt.format(errtime, err)
             raise GWRemoteSha256Exception(errmsg)
@@ -477,14 +484,12 @@ class GWFrameQuery(object):
             remote_url = self.remote_url()
         fullpath = self.local_fullpath_from_remote(remote_url)
         cmd = ['sha256sum', fullpath]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+        complain("Running command in subprocess:", cmd)
+        proc = Popen(cmd, **_PIPE_ARGS)
         res, err = proc.communicate()
+        complain("STDOUT:", res, "STDERR:", err)
         if proc.returncode != 0:
-            errtime = datetime.datetime.utcnow().isoformat()
+            errtime = datetime.utcnow().isoformat()
             errfmt = "LOCAL_SHA256 ERROR at {}. STDERR: \n{}\n"
             errmsg = errfmt.format(errtime, err)
             raise GWLocalSha256Exception(errmsg)
@@ -539,7 +544,7 @@ class GWFrameQuery(object):
                 #  so, then it might still be an active download and should be
                 #  left alone.
                 if time_since_file_modified(local_fullpath) > 60:
-                    errtime = datetime.datetime.utcnow().isoformat()
+                    errtime = datetime.utcnow().isoformat()
                     errfmt = "CORRUPT FILE at {}. DELETING AND PROCEEDING.\n"
                     errmsg = errfmt.format(errtime)
                     with open(riders.error_msg, 'a') as f:
@@ -559,12 +564,10 @@ class GWFrameQuery(object):
                 download_url,
                 local_fullpath
             ]
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+            complain("Running command in subprocess:", cmd)
+            proc = Popen(cmd, **_PIPE_ARGS)
             res, err = proc.communicate()
+            complain("STDOUT:", res, "STDERR:", err)
             if proc.returncode == 0:
                 # get the remote sha256 sum
                 try:
@@ -585,7 +588,7 @@ class GWFrameQuery(object):
                         f.write(e.args[0])
                     raise e
             else:
-                errtime = datetime.datetime.utcnow().isoformat()
+                errtime = datetime.utcnow().isoformat()
                 errfmt = "DOWNLOAD ERROR at {}. STDERR: \n{}\n"
                 errmsg = errfmt.format(errtime, err)
                 with open(riders.error_msg, 'a') as f:
@@ -717,11 +720,13 @@ def check_progress(queries):
 def display_progress(status):
     """Print how much progress has been made so far."""
     total_q = len(status['all_queries'])
-    fmt = '{0: <16}:   {1: >4}/{2: <4} ({3}%)'
+    fmt = '{0: <16}:   [{1}] {2: >4}/{3: <4} ({4}%)'
     for key in status:
         number_of_queries = len(status[key])
         percent = (100.0 * number_of_queries) / total_q
-        print(fmt.format(key, number_of_queries, total_q, percent))
+        barticks = int(percent / 100. * PROG_BAR_WIDTH) 
+        bar = "#"*barticks + " "*(PROG_BAR_WIDTH-barticks)
+        print(fmt.format(key, bar, number_of_queries, total_q, percent))
 
 
 def read_starts_and_deltats(infile):
@@ -745,7 +750,8 @@ def read_starts_and_deltats(infile):
     return [(int(start), int(stop)-int(start)) for start, stop in start_stops]
 
 
-def main(args):
+def main():
+    complain("Arguments:", args)
     if args.times:
         times = read_starts_and_deltats(sys.stdin)
     elif args.start and args.deltat:
@@ -768,15 +774,23 @@ def main(args):
         ],
         list()
     )
+    complain("Queries:", *[format(q) for q in queries])
+    complain("Total queries: ", len(queries))
     if args.progress:
         display_progress(check_progress(queries))
     else:
+        if args.verbose:
+            complain("Checking progress before starting.")
+            display_progress(check_progress(queries))
         for query in queries:
             if not query.estimated_fullpath_exists():
                 try:
                     query.download()
                 except FileNameParsingError:
                     complain('Filename parse error, skipping:\n' + repr(query))
+        if args.verbose:
+            complain("Done. Checking progress at end:")
+            display_progress(check_progress(queries))
 
 if __name__ == "__main__":
-    main(args)
+    main()
