@@ -14,7 +14,6 @@
     ".n,m-trend"
   ],
   "dq_flags": [
-    "H1:DMT-ANALYSIS_READY:1",
     "L1:DMT-ANALYSIS_READY:1"
   ],
   "max_chunk_length": 86400,
@@ -28,9 +27,9 @@
       {
         "plot_properties": {
           "detrend": "none",
-          "handle_missing_values": "hide",
-          "handle_unrecorded_values": "hide",
-          "omitted_indices": [211, 247, 569, 588, 618, 700, 790, 923],
+          "#handle_missing_values": "hide",
+          "#handle_unrecorded_values": "hide",
+          "omitted_indices": [],
           "outliers_lower_bound": -1e-5,
           "outliers_upper_bound":  1e-5,
           "fname_desc": "original-data"
@@ -41,9 +40,9 @@
       {
         "plot_properties": {
           "detrend": "linear",
-          "handle_missing_values": "hide",
-          "handle_unrecorded_values": "hide",
-          "omitted_indices": [211, 247, 569, 588, 618, 700, 790, 923],
+          "#handle_missing_values": "hide",
+          "#handle_unrecorded_values": "hide",
+          "omitted_indices": [],
           "outliers_lower_bound": -1e-5,
           "outliers_upper_bound":  1e-5,
           "ylim_top": 220,
