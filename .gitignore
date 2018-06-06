@@ -2,5 +2,7 @@
 *.swo
 *.png
 *.pyc
+classes_*.pdf
+packages_*.pdf
 todo.pdf
 todo.tex
