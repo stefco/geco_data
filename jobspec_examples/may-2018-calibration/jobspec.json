@@ -28,7 +28,7 @@
           "outliers_upper_bound":  1e-5,
           "fname_desc": "original-data"
         },
-        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "dq_flag": null,
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
       },
       {
@@ -42,7 +42,7 @@
           "ylim_top": 220,
           "ylim_bottom": -220
         },
-        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "dq_flag": null,
         "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
       }
     ],
