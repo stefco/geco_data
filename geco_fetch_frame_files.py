@@ -4,7 +4,7 @@
 DESC = """Find all frame files of a given frame type in a given time range on
 a remote LIGO server and download them to the specified output directory,
 skipping any files that have already been downloaded."""
-PROG_BAR_WIDTH = 20
+PROG_BAR_WIDTH = 40
 DEFAULT_H_FRAMETYPES = []
 DEFAULT_L_FRAMETYPES = []
 DEFAULT_V_FRAMETYPES = []
@@ -54,6 +54,17 @@ if __name__ == "__main__":
             ``--deltat`` arguments, which are ignored if ``--times`` is
             specified).
         """.format(sys.argv[0])
+    )
+    parser.add_argument(
+        "-r",
+        "--retries",
+        type=int,
+        default=0,
+        help="""
+            In the event of an error, retry an additional ``retries`` number of
+            times. By default, do not retry (i.e. ``retries = 0``). To keep
+            retrying an infinite number of times, specify any negative number.
+        """
     )
     parser.add_argument(
         "-t",
@@ -301,6 +312,7 @@ class GWFrameQuery(object):
         fullcmd = ['gsissh', self.server, cmd]
         proc = Popen(fullcmd, stdout=PIPE, stderr=PIPE)
         res, err = proc.communicate()
+        complain("RETVAL:", proc.returncode, "STDOUT:", res, "STDERR:", err)
         if proc.returncode != 0:
             raise exception("Something went wrong: {}".format(err))
         return (res, err)
@@ -487,7 +499,7 @@ class GWFrameQuery(object):
         complain("Running command in subprocess:", cmd)
         proc = Popen(cmd, **_PIPE_ARGS)
         res, err = proc.communicate()
-        complain("STDOUT:", res, "STDERR:", err)
+        complain("RETVAL:", proc.returncode, "STDOUT:", res, "STDERR:", err)
         if proc.returncode != 0:
             errtime = datetime.utcnow().isoformat()
             errfmt = "LOCAL_SHA256 ERROR at {}. STDERR: \n{}\n"
@@ -567,7 +579,8 @@ class GWFrameQuery(object):
             complain("Running command in subprocess:", cmd)
             proc = Popen(cmd, **_PIPE_ARGS)
             res, err = proc.communicate()
-            complain("STDOUT:", res, "STDERR:", err)
+            complain("RETVAL:", proc.returncode, "STDOUT:", res, "STDERR:",
+                     err)
             if proc.returncode == 0:
                 # get the remote sha256 sum
                 try:
@@ -720,12 +733,16 @@ def check_progress(queries):
 def display_progress(status):
     """Print how much progress has been made so far."""
     total_q = len(status['all_queries'])
-    fmt = '{0: <16}:   [{1}] {2: >4}/{3: <4} ({4}%)'
+    fmt = '{0: <16} {1} {2: >4}/{3: <4} ({4:.3f}%)'
     for key in status:
         number_of_queries = len(status[key])
         percent = (100.0 * number_of_queries) / total_q
         barticks = int(percent / 100. * PROG_BAR_WIDTH) 
-        bar = "#"*barticks + " "*(PROG_BAR_WIDTH-barticks)
+        bar = "#"*barticks + "-"*(PROG_BAR_WIDTH-barticks)
+        if number_of_queries == 0:
+            bar = "-" + bar
+        else:
+            bar = "#" + bar
         print(fmt.format(key, bar, number_of_queries, total_q, percent))
 
 
@@ -782,12 +799,25 @@ def main():
         if args.verbose:
             complain("Checking progress before starting.")
             display_progress(check_progress(queries))
-        for query in queries:
-            if not query.estimated_fullpath_exists():
-                try:
-                    query.download()
-                except FileNameParsingError:
-                    complain('Filename parse error, skipping:\n' + repr(query))
+        tries_left = args.retries
+        if tries_left >= 0:
+            tries_left += 1
+        while tries_left != 0:
+            try:
+                for query in queries:
+                    if not query.estimated_fullpath_exists():
+                        try:
+                            query.download()
+                        except FileNameParsingError:
+                            complain('Filename parse error, skipping:', query)
+            except Exception as err:
+                complain("Exception caught:", err)
+                if tries_left < 0:
+                    complain("Retrying. Will keep trying till interrupted.")
+                else:
+                    tries_left -= 1
+                    if tries_left != 0:
+                        complain("Retrying. Tries left: {}".format(tries_left))
         if args.verbose:
             complain("Done. Checking progress at end:")
             display_progress(check_progress(queries))
