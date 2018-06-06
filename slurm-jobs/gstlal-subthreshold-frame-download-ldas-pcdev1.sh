@@ -48,7 +48,6 @@ fi
 
 # head -2 "${times}" | geco_fetch_frame_files.py "$@" \
 geco_fetch_frame_files.py <"${times}" "$@" \
-    --verbose \
     --times \
     --outdir                "${outdir}" \
     --length                "${frame_length}" \

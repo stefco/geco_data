@@ -47,7 +47,6 @@ else
 fi
 
 geco_fetch_frame_files.py <"${times}" "$@" \
-    --verbose \
     --times \
     --outdir                "${outdir}" \
     --length                "${frame_length}" \
