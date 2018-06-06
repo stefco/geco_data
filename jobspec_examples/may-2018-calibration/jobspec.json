@@ -7,15 +7,9 @@
     "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
   ],
   "trends": [
-    ".mean,m-trend",
-    ".rms,m-trend",
-    ".max,m-trend",
-    ".min,m-trend",
-    ".n,m-trend"
+    ".mean,m-trend"
   ],
-  "dq_flags": [
-    "L1:DMT-ANALYSIS_READY:1"
-  ],
+  "dq_flags": [],
   "max_chunk_length": 86400,
   "slow_channel_plots": {
     "height": 10.0,
