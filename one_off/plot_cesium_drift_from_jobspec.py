@@ -4,9 +4,11 @@
 from gwpy.time import tconvert
 import numpy as np
 import matplotlib.pyplot as plt
-import geco_gwpy_dump as g
-j = g.Job.load()
-dat = j.full_queries[0].read()
+from geco_gwpy_dump import Job
+
+dat = Job.load().full_queries[0].read()
+
+
 def make_plot(x_axis, y_axis, location):
     start_time = str(tconvert(int(min(x_axis))))
     end_time = str(tconvert(int(max(x_axis))))
@@ -39,7 +41,7 @@ def make_plot(x_axis, y_axis, location):
                  start_time + ' until ' + end_time +
                  location, fontsize=20)
     plt.subplots_adjust(top=0.88888888, bottom=0.1)
-    ax1 = fig.add_subplot(311)
+    ax1 = fig.add_subplot(211)
     ax1.set_title('Line of best fit versus offset')
     ax1.plot(x, y_ax, '#ff0000')
     ax1.plot(x, y_axis_lobf, '#617d8d')
@@ -50,12 +52,7 @@ def make_plot(x_axis, y_axis, location):
              boxstyle='round', alpha=0.25))
     ax1.set_xlabel('GPS time')
     ax1.set_ylabel('Offset [$\mu$s]')
-    # ax3 = fig.add_subplot(313)
-    # n, bins, patches = plt.hist(y_dif, 20, facecolor = '#139a0e')
-    # ax3.set_xlabel('$\Delta$t [$\mu$s]')
-    # ax3.set_ylabel('Frequency')
-    # ax3.set_title('histogram of the residual')
-    ax2 = fig.add_subplot(312)
+    ax2 = fig.add_subplot(212)
     ax2.plot(x, y_dif)
     ax2.set_xlabel('GPS time')
     ax2.set_title('Residual of the line of best fit')
@@ -67,4 +64,5 @@ def make_plot(x_axis, y_axis, location):
     fig.savefig('cesium_clock_drift_from_' + start_time.replace(' ','_') +
                 '_until_' + end_time.replace(' ','_') + '.png', dpi=300)
  
-make_plot(dat.times.to("s").value, dat.value, "LLO")
+if __name__ == "__main__":
+    make_plot(dat.times.to("s").value, dat.value, "LLO")
