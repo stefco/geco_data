@@ -1,0 +1,51 @@
+{
+  "start": "Sat Jan 20 00:00:00 2018",
+  "end": "Sun May 20 00:00:00 2018",
+  "exts": ["hdf5"],
+  "max_chunk_length": 86400,
+  "channels": [
+    "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+  ],
+  "trends": [
+    ".mean,m-trend"
+  ],
+  "dq_flags": [],
+  "max_chunk_length": 86400,
+  "slow_channel_plots": {
+    "height": 10.0,
+    "width": 7.5,
+    "channel_descriptions": {
+      "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1": "LLO Cs-III Cesium Clock"
+    },
+    "plots": [
+      {
+        "plot_properties": {
+          "detrend": "none",
+          "#handle_missing_values": "hide",
+          "#handle_unrecorded_values": "hide",
+          "omitted_indices": [],
+          "outliers_lower_bound": -1e-5,
+          "outliers_upper_bound":  1e-5,
+          "fname_desc": "original-data"
+        },
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+      },
+      {
+        "plot_properties": {
+          "detrend": "linear",
+          "#handle_missing_values": "hide",
+          "#handle_unrecorded_values": "hide",
+          "omitted_indices": [],
+          "outliers_lower_bound": -1e-5,
+          "outliers_upper_bound":  1e-5,
+          "ylim_top": 220,
+          "ylim_bottom": -220
+        },
+        "dq_flag": "L1:DMT-ANALYSIS_READY:1",
+        "channel": "L1:SYS-TIMING_C_MA_A_PORT_2_SLAVE_CFC_TIMEDIFF_1"
+      }
+    ],
+    "run": "post-O2"
+  }
+}
