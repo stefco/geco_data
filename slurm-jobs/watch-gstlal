@@ -1,6 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # (c) Stefan Countryman (2018)
 # Watch progress of gstlal download jobs
+
+set -o errexit
+set -o pipefail
 
 cry(){ echo "$@" >&2; }
 
@@ -23,27 +26,31 @@ usage(){
 add_cmd(){ cmd+="$1; "; }
 
 all_scripts(){
-    local scripts=(~/dev/geco_data/slurm-jobs/gstlal-subthreshold-raw-*)
-    local scripts_fmt="for d in $(printf " '%s'" "${scripts[@]}"); do %s; done"
-    add_cmd "${scripts_fmt/%s/$1}"
+    local scripts_fmt="for p in $(printf " '%s'" "${scripts[@]}"); do %s; done"
+    add_cmd "${scripts_fmt//%s/$1}"
 }
 
-all_outdirs(){
-    local outdirs=(/rigel/geco/users/shared/frames/gstlal_offline_subthreshold/gstlal-subthreshold-raw-*)
-    local outdirs_fmt="for d in $(printf " '%s'" "${outdirs[@]}"); do %s; done"
-    add_cmd "${outdirs_fmt/%s/$1}"
+# USAGE: map CMD ITEM1 [ITEM2 ...]
+# the loop variable is called `arg`, so use "$arg" in CMD as a placeholder.
+map(){
+    newcmd="$1; "
+    shift
+    local fmt="for arg in $(printf " '%s'" "$@"); do %s; done"
+    add_cmd "${fmt//%s/${newcmd}}"
 }
 
+SCRIPTS=(~/dev/geco_data/slurm-jobs/gstlal-subthreshold-frame-download-ldas-pcdev*.sh)
+OUTDIRS=(/rigel/geco/users/shared/frames/gstlal_offline_subthreshold/gstlal-subthreshold-raw-*)
 time=30
 while getopts "hpfsn:" opt; do
     case ${opt} in
-        p)  all_scripts '$script -p';;
-        f)  all_outdirs 'echo "DIR: $outdir"; ls -lath $outdir | head; echo;';;
+        p)  map '$arg -p' "${SCRIPTS[@]}";;
+        f)  map 'echo "DIR: $arg"; ls -lath $arg | head; echo;' "${OUTDIRS[@]}";;
         s)  cmd+="squeue -u $(whoami); ";;
         n)  time="${OPTARG}";;
-        \?) die "Invalid option: -${OPTARG}";;
+        \?) die;;
     esac
 done
-[[ -v cmd ]] || usage && exit;
+[[ -v cmd ]] || (usage && exit);
 
-echo watch -n "$time" "${cmd}";
+watch -n "$time" "${cmd}";
