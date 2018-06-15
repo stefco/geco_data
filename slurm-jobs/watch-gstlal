@@ -33,7 +33,7 @@ all_scripts(){
 # USAGE: map CMD ITEM1 [ITEM2 ...]
 # the loop variable is called `arg`, so use "$arg" in CMD as a placeholder.
 map(){
-    newcmd="$1; "
+    newcmd="$1"
     shift
     local fmt="for arg in $(printf " '%s'" "$@"); do %s; done"
     add_cmd "${fmt//%s/${newcmd}}"
@@ -45,12 +45,15 @@ time=30
 while getopts "hpfsn:" opt; do
     case ${opt} in
         p)  map '$arg -p' "${SCRIPTS[@]}";;
-        f)  map 'echo "DIR: $arg"; ls -lath $arg | head; echo;' "${OUTDIRS[@]}";;
+        f)  map 'echo "DIR: $arg"; ls -lath $arg | head; echo' "${OUTDIRS[@]}";;
         s)  cmd+="squeue -u $(whoami); ";;
         n)  time="${OPTARG}";;
         \?) die;;
     esac
 done
-[[ -v cmd ]] || (usage && exit);
+if ! [[ -v cmd ]]; then
+    usage
+    exit
+fi
 
-watch -n "$time" "${cmd}";
+watch -n "${time}" "${cmd}";
