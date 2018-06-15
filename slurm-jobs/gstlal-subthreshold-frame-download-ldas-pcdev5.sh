@@ -3,7 +3,7 @@
 # Download raw frames surrounding O1/O2 GSTLAL subthreshold triggers.
 #
 #SBATCH --account=geco
-#SBATCH --job-name=LIGOFrameDownload
+#SBATCH --job-name=FrDL5
 #SBATCH -c 1                # number of CPU cores to use
 #SBATCH --time=72:00:00     # run for 3 days
 #SBATCH --mem-per-cpu=2gb
@@ -22,11 +22,11 @@ server=ldas-pcdev5.ligo.caltech.edu
 dirname=gstlal-subthreshold-raw-3
 
 # where is the list of start/stop times?
-times=/rigel/geco/users/shared/gstlal-subthreshold-raw-frames/raw-frame-times-v2-3.txt
+times=/rigel/home/stc2117/dev/geco_data/slurm-jobs/static/raw-frame-times-v3-3.txt
 
 #--[ DERIVED QUANTITIES ]--
 
-outdir=/rigel/geco/users/stc2117/"${dirname}"
+outdir=/rigel/geco/users/shared/frames/gstlal_offline_subthreshold/"${dirname}"
 mkdir -p "${outdir}"
 echo OUTDIR: "${outdir}"
 
