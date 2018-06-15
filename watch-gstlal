@@ -10,7 +10,7 @@ cry(){ echo "$@" >&2; }
 die(){ cry "$@" && usage && exit 1; }
 
 usage(){
-    cry "USAGE: $0 [-p] [-f] [-s] [-n REFRESH] [-h]"
+    cry "USAGE: $0 [-p] [-f] [-s] [-n REFRESH] [-S SERVERNAME] [-h]"
     cry
     cry "Watch progress of GSTLAL downloads every 30 seconds. This will fail"
     cry "if you have spaces in any of the script or output directory path"
@@ -20,6 +20,7 @@ usage(){
     cry "-p shows job progress"
     cry "-f shows file info/disk usage"
     cry "-s shows slurm queue for current user"
+    cry "-S remote server to run this on"
     cry "-n override default of 30 second time delay between refreshes"
 }
 
@@ -42,18 +43,24 @@ map(){
 SCRIPTS=(~/dev/geco_data/slurm-jobs/gstlal-subthreshold-frame-download-ldas-pcdev*.sh)
 OUTDIRS=(/rigel/geco/users/shared/frames/gstlal_offline_subthreshold/gstlal-subthreshold-raw-*)
 time=30
-while getopts "hpfsn:" opt; do
+while getopts "hpfsn:S:" opt; do
     case ${opt} in
         p)  map '$arg -p' "${SCRIPTS[@]}";;
         f)  map 'echo "DIR: $arg"; ls -lath $arg | head; echo' "${OUTDIRS[@]}";;
         s)  cmd+="squeue -u $(whoami); ";;
+        S)  server="${OPTARG}";;
         n)  time="${OPTARG}";;
         \?) die;;
     esac
 done
+
 if ! [[ -v cmd ]]; then
     usage
     exit
 fi
 
-watch -n "${time}" "${cmd}";
+if [[ -v server ]]; then
+    ssh "${server}" "$(printf 'watch -n %s %q' "${time}" "${cmd}")"
+else
+    watch -n "${time}" "${cmd}";
+fi
