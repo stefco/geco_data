@@ -50,6 +50,10 @@ while getopts "hpfsn:S:" opt; do
         s)  cmd+="squeue -u $(whoami); ";;
         S)  server="${OPTARG}";;
         n)  time="${OPTARG}";;
+        h)
+            usage
+            exit
+        ;;
         \?) die;;
     esac
 done
