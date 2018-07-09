@@ -58,6 +58,6 @@ geco_fetch_frame_files.py <"${times}" "$@" \
 exitcode=$?
 
 # mark end time
-printf 'JOB EXITING.\n'
+printf 'JOB EXITING AT '
 date
 exit ${exitcode}

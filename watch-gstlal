@@ -46,7 +46,7 @@ time=30
 while getopts "hpfsn:S:" opt; do
     case ${opt} in
         p)  map '$arg -p' "${SCRIPTS[@]}";;
-        f)  map 'echo "DIR: $arg"; ls -lath $arg | head; echo' "${OUTDIRS[@]}";;
+        f)  map 'echo "DIR: $arg"; ls -lath $arg | head' "${OUTDIRS[@]}";;
         s)  cmd+="squeue -u $(whoami); ";;
         S)  server="${OPTARG}";;
         n)  time="${OPTARG}";;
