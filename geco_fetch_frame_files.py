@@ -5,6 +5,7 @@ DESC = """Find all frame files of a given frame type in a given time range on
 a remote LIGO server and download them to the specified output directory,
 skipping any files that have already been downloaded."""
 PROG_BAR_WIDTH = 40
+VERBOSE = True  # default to verbose for interactive sessions
 DEFAULT_H_FRAMETYPES = []
 DEFAULT_L_FRAMETYPES = []
 DEFAULT_V_FRAMETYPES = []
@@ -163,8 +164,9 @@ if __name__ == "__main__":
         help="Print diagnostic information to STDERR."
     )
     args = parser.parse_args()
+    VERBOSE = args.verbose
     _PIPE_ARGS = {"stdout": PIPE, "stderr": PIPE}
-    if args.verbose:  # if verbose, print everything
+    if VERBOSE:  # if verbose, print everything
         _PIPE_ARGS = {"stdout": PIPE}
 
 import filecmp
@@ -212,7 +214,7 @@ def complain(*messages):
     ``--verbose`` flag is set. Otherwise, throw away the message. If multiple
     messages are provided, join them with newlines."""
     msg = '\n'.join([format(m) for m in messages])
-    if args.verbose:
+    if VERBOSE:
         formatted_message = _COMPLAINT.format(datetime.now().isoformat(), msg)
         sys.stderr.write(formatted_message)
 
@@ -796,7 +798,7 @@ def main():
     if args.progress:
         display_progress(check_progress(queries))
     else:
-        if args.verbose:
+        if VERBOSE:
             complain("Checking progress before starting.")
             display_progress(check_progress(queries))
         tries_left = args.retries
@@ -818,7 +820,7 @@ def main():
                     tries_left -= 1
                     if tries_left != 0:
                         complain("Retrying. Tries left: {}".format(tries_left))
-        if args.verbose:
+        if VERBOSE:
             complain("Done. Checking progress at end:")
             display_progress(check_progress(queries))
 
