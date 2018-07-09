@@ -41,7 +41,6 @@ _COMPLAINT = "{}---[{{}}]---{}\n{{}}\n".format(_BLUE, _CLEAR)
 # documentation printing.
 import sys
 from subprocess import Popen, PIPE
-_PIPE_ARGS = {"stdout": PIPE, "stderr": PIPE}  # can be overridden if VERBOSE
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=DESC)
@@ -166,8 +165,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     VERBOSE = args.verbose
-    if VERBOSE:  # if verbose, print everything
-        _PIPE_ARGS = {"stdout": PIPE}
+if VERBOSE:  # if verbose, print everything
+    _PIPE_ARGS = {"stdout": PIPE}
+else:
+    _PIPE_ARGS = {"stdout": PIPE, "stderr": PIPE}
 
 import filecmp
 import numpy as np
