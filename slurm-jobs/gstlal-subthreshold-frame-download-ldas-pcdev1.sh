@@ -22,7 +22,7 @@ server=ldas-pcdev1.ligo.caltech.edu
 dirname=gstlal-subthreshold-raw-1
 
 # where is the list of start/stop times?
-times=/rigel/home/stc2117/dev/geco_data/slurm-jobs/static/raw-frame-times-v3-1.txt
+times=/rigel/home/stc2117/dev/geco_data/slurm-jobs/static/raw-frame-times-v4-1.txt
 
 #--[ DERIVED QUANTITIES ]--
 
