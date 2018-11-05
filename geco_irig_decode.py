@@ -9,7 +9,7 @@ import numpy as np
 
 if len(sys.argv) > 1:
     print(
-        "Usage: {} <input_file.txt\n\n" +
+        "Usage: {} <input_file.txt\n\n".format(sys.argv[0]) +
         fill(
             """Read a raw IRIG-B signal from STDIN and print out decoded
             timestamps.  Data must be a newline-delimited list of floating
@@ -19,7 +19,7 @@ if len(sys.argv) > 1:
             it must have (Sample Rate) x (N) values, where N is the number of
             seconds that must be decoded, and the data must start at the
             beginning of a second.
-            """.format(sys.argv[0])
+            """
         )
     )
     exit(1)

@@ -17,11 +17,14 @@ if __name__ == "__main__" and {"-h", "--help"}.intersection(sys.argv):
     print(__doc__)
 
 # pylint: disable=wrong-import-position
+from datetime import timedelta
 from astropy.time import Time
 from gwpy.timeseries import TimeSeries
 from dateutil.parser import parse as parse_datetime
 import geco_irig_decode
 
+RED = '\033[91m'
+CLEAR = '\033[0m'
 BITRATE = 16384
 IFOS = ['H1', 'L1']
 ARMS = ['X', 'Y']
@@ -31,15 +34,15 @@ TFORMAT = '%a %b %d %X %Y'
 
 
 def get_leap_seconds(gps):
-    """Find the number of leap seconds at a given gps time using astropy's
-    time module (by comparing UTC to TAI and subtracting 19, the base difference
+    """Find the number of leap seconds at a given gps time using astropy's time
+    module (by comparing UTC to TAI and subtracting 19, the base difference
     between TAI and GPS scales)."""
     t = Time(gps, format='gps')
     t.format = 'iso'
     return (t.tai.to_datetime() - t.utc.to_datetime()).seconds - 19
 
 
-def check_decoded_times(start_time, graceid, timewindow=30):
+def check_decoded_times(start_time, timewindow=30):
     """Check the decoded IRIG-B times within a window of size timewindow
     surrounding the event time and make sure the times are all correct (i.e.
     they are either the correct UTC or GPS time; either one is considered
@@ -47,9 +50,6 @@ def check_decoded_times(start_time, graceid, timewindow=30):
     EVNT log."""
     leap_seconds = get_leap_seconds(start_time)
     print('leap_seconds: {}'.format(leap_seconds))
-    print('Times are allowed to be off by current number of leap')
-    print('seconds. This most likely indicates that the device')
-    print('producing the IRIG-B signal is outputting GPS time.')
     for chan in CHANS:
         format_string = 'Decoding {}+/-{}s on channel {}.'
         msg = format_string.format(start_time, timewindow, chan)
@@ -60,8 +60,7 @@ def check_decoded_times(start_time, graceid, timewindow=30):
         for i in range(2*timewindow + 1):
             timeseries_slice = timeseries[i*BITRATE:(i+1)*BITRATE]
             gps_actual = (start_time - timewindow) + i
-            t_actual = Time(gps_actual, format='gps',
-                                            scale='utc')
+            t_actual = Time(gps_actual, format='gps', scale='utc')
             t = geco_irig_decode.get_date_from_timeseries(timeseries_slice)
             dt = (t - t_actual.to_datetime()).seconds
             # check whether the times agree, or whether they are off by the
@@ -72,17 +71,32 @@ def check_decoded_times(start_time, graceid, timewindow=30):
                 print('{} OK, IS GPS'.format(t.strftime(TFORMAT)))
             else:
                 t_actual_str = t_actual.to_datetime().strftime(TFORMAT)
-                print('{} IS WRONG! SHOULD BE {}'.format(t.strftime(TFORMAT),
-                                                         t_actual_str))
+                print(
+                    '{}{} IS WRONG! SHOULD BE {}{}'.format(
+                        RED,
+                        t.strftime(TFORMAT),
+                        t_actual_str,
+                        CLEAR
+                    )
+                )
 
 
 def main():
+    """Check the specified date range; see module docstring."""
     start = parse_datetime(sys.argv[1]).replace(hour=0, minute=0, second=0)
     end = parse_datetime(sys.argv[2]).replace(hour=0, minute=0, second=0)
     days = (end - start).days + 1
+    print('Processing {} days between {} and {}.'.format(days, start, end))
+    print('Times are allowed to be off by current number of leap')
+    print('seconds. This most likely indicates that the device')
+    print('producing the IRIG-B signal is outputting GPS time.')
     if days < 1:
         sys.stderr.write("end day cannot be earlier than start day.")
         exit(1)
-    for day in (start + datetime.timedelta(d) for d in range(days)):
+    for day in (start + timedelta(d) for d in range(days)):
         print("CHECKING DATE: {}".format(day.isoformat()))
-        check_decoded_times(
+        check_decoded_times(Time(day).gps)
+
+
+if __name__ == "__main__":
+    main()
