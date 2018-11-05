@@ -7,7 +7,7 @@ from textwrap import fill
 import numpy as np
 # import scipy.ndimage.filters as scf
 
-if len(sys.argv) > 1:
+if __name__ == "__main__" and len(sys.argv) > 1:
     print(
         "Usage: {} <input_file.txt\n\n".format(sys.argv[0]) +
         fill(
