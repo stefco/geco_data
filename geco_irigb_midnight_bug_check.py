@@ -15,6 +15,7 @@ import sys
 # spit out help string before slow imports if necessary
 if __name__ == "__main__" and {"-h", "--help"}.intersection(sys.argv):
     print(__doc__)
+    exit(0)
 
 # pylint: disable=wrong-import-position
 from datetime import timedelta
