@@ -48,37 +48,45 @@ def check_decoded_times(start_time, timewindow=30):
     they are either the correct UTC or GPS time; either one is considered
     correct). Save the results of the check to a text file for upload to LIGO's
     EVNT log."""
-    leap_seconds = get_leap_seconds(start_time)
-    print('leap_seconds: {}'.format(leap_seconds))
     for chan in CHANS:
         format_string = 'Decoding {}+/-{}s on channel {}.'
         msg = format_string.format(start_time, timewindow, chan)
         print(msg)
+        # print a header, since output will be arranged tabularly, e.g.
+        # 1225152018 | 1225152018 |   18 | GPS   |   0 |   0 |  0 | 306 | ...
+        # 2018 | Thu Nov 02 00:00:00 2018 | Fri Nov 02 23:59:42 2018
+        print("Actual GPS | Decode GPS | Leap | Scale | Sec | Min | Hr | Day "
+              "| Year | Decoded Date/Time        | Actual UTC Date/Time")
+        print("-----------+------------+------+-------+-----+-----+----+-----"
+              "+------+--------------------------+-------------------------")
+        row_fmt = ("{gps_actual:>10d} | {gps_decoded:>10d} | {leap:>4d} | "
+                   "{scale:<5} | {second:>3d} | {minute:>3d} | {hour:>2d} | "
+                   "{day:>3d} | {year:>4d} | {datetime_decoded:<24} | "
+                   "{datetime_actual:<24}")
         timeseries = TimeSeries.fetch(chan, start_time-timewindow,
                                       start_time+timewindow+1).value
         # deal with one second at a time, writing results to file
         for i in range(2*timewindow + 1):
             timeseries_slice = timeseries[i*BITRATE:(i+1)*BITRATE]
             gps_actual = (start_time - timewindow) + i
+            leap_seconds = get_leap_seconds(gps_actual)
             t_actual = Time(gps_actual, format='gps', scale='utc')
-            t = geco_irig_decode.get_date_from_timeseries(timeseries_slice)
+            decoded = geco_irig_decode.decode_timeseries(timeseries_slice)
+            t = decoded['datetime_decoded']
             dt = (t - t_actual.to_datetime()).seconds
+            datetime_actual = t_actual.to_datetime().strftime(TFORMAT)
             # check whether the times agree, or whether they are off by the
             # current number of leap seconds
             if dt == 0:
-                print('{} OK, IS UTC'.format(t.strftime(TFORMAT)))
+                scale = "UTC"
             elif dt == leap_seconds:
-                print('{} OK, IS GPS'.format(t.strftime(TFORMAT)))
+                scale = "GPS"
             else:
-                t_actual_str = t_actual.to_datetime().strftime(TFORMAT)
-                print(
-                    '{}{} IS WRONG! SHOULD BE {}{}'.format(
-                        RED,
-                        t.strftime(TFORMAT),
-                        t_actual_str,
-                        CLEAR
-                    )
-                )
+                scale = "ERROR"
+            print(row_fmt.format(gps_actual=gps_actual,
+                                 gps_decoded=Time(t).gps, leap=leap_seconds,
+                                 scale=scale, datetime_actual=datetime_actual,
+                                 **decoded))
 
 
 def main():

@@ -67,8 +67,6 @@ def check_decoded_times(start_time, graceid, DT=DT):
     event time and make sure the times are all correct (i.e. they are either
     the correct UTC or GPS time; either one is considered correct). Save
     the results of the check to a text file for upload to LIGO's EVNT log."""
-    leap_seconds = get_leap_seconds(start_time)
-    print('leap_seconds: {}'.format(leap_seconds))
     with open('{}-decoded-times.txt'.format(graceid), 'w') as f:
         f.write('Times are allowed to be off by current number of leap\n')
         f.write('seconds. This most likely indicates that the device\n')
@@ -84,6 +82,7 @@ def check_decoded_times(start_time, graceid, DT=DT):
             for i in range(2*DT + 1):
                 timeseries_slice = timeseries[i*BITRATE:(i+1)*BITRATE]
                 gps_actual = (start_time - DT) + i
+                leap_seconds = get_leap_seconds(gps_actual)
                 t_actual = astropy.time.Time(gps_actual, format='gps',
                                              scale='utc')
                 t = geco_irig_decode.get_date_from_timeseries(timeseries_slice)

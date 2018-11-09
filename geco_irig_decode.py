@@ -2,12 +2,12 @@
 # (c) Stefan Countryman, 2016-2017
 
 import sys
-import datetime
+from datetime import datetime, timedelta
 from textwrap import fill
 import numpy as np
 # import scipy.ndimage.filters as scf
 
-if len(sys.argv) > 1:
+if __name__ == "__main__" and len(sys.argv) > 1:
     print(
         "Usage: {} <input_file.txt\n\n".format(sys.argv[0]) +
         fill(
@@ -54,57 +54,57 @@ REP_C = [1, 1, 1, 0]
 CURRENT_CENTURY = 20
 
 # how many seconds does each bit represent?
-seconds = np.zeros(BITS_PER_SECOND, dtype=int)
-seconds[1] = 1
-seconds[2] = 2
-seconds[3] = 4
-seconds[4] = 8
-seconds[6] = 10
-seconds[7] = 20
-seconds[8] = 40
+SECONDS = np.zeros(BITS_PER_SECOND, dtype=int)
+SECONDS[1] = 1
+SECONDS[2] = 2
+SECONDS[3] = 4
+SECONDS[4] = 8
+SECONDS[6] = 10
+SECONDS[7] = 20
+SECONDS[8] = 40
 
 # how many minutes does each bit represent?
-minutes = np.zeros(BITS_PER_SECOND, dtype=int)
-minutes[10] = 1
-minutes[11] = 2
-minutes[12] = 4
-minutes[13] = 8
-minutes[15] = 10
-minutes[16] = 20
-minutes[17] = 40
+MINUTES = np.zeros(BITS_PER_SECOND, dtype=int)
+MINUTES[10] = 1
+MINUTES[11] = 2
+MINUTES[12] = 4
+MINUTES[13] = 8
+MINUTES[15] = 10
+MINUTES[16] = 20
+MINUTES[17] = 40
 
 # how many hours does each bit represent?
-hours = np.zeros(BITS_PER_SECOND, dtype=int)
-hours[20] = 1
-hours[21] = 2
-hours[22] = 4
-hours[23] = 8
-hours[25] = 10
-hours[26] = 20
+HOURS = np.zeros(BITS_PER_SECOND, dtype=int)
+HOURS[20] = 1
+HOURS[21] = 2
+HOURS[22] = 4
+HOURS[23] = 8
+HOURS[25] = 10
+HOURS[26] = 20
 
 # how many days does each bit represent?
-days = np.zeros(BITS_PER_SECOND, dtype=int)
-days[30] = 1
-days[31] = 2
-days[32] = 4
-days[33] = 8
-days[35] = 10
-days[36] = 20
-days[37] = 40
-days[38] = 80
-days[40] = 100
-days[41] = 200
+DAYS = np.zeros(BITS_PER_SECOND, dtype=int)
+DAYS[30] = 1
+DAYS[31] = 2
+DAYS[32] = 4
+DAYS[33] = 8
+DAYS[35] = 10
+DAYS[36] = 20
+DAYS[37] = 40
+DAYS[38] = 80
+DAYS[40] = 100
+DAYS[41] = 200
 
 # how many years does each bit represent?
-years = np.zeros(BITS_PER_SECOND, dtype=int)
-years[50] = 1
-years[51] = 2
-years[52] = 4
-years[53] = 8
-years[55] = 10
-years[56] = 20
-years[57] = 40
-years[58] = 80
+YEARS = np.zeros(BITS_PER_SECOND, dtype=int)
+YEARS[50] = 1
+YEARS[51] = 2
+YEARS[52] = 4
+YEARS[53] = 8
+YEARS[55] = 10
+YEARS[56] = 20
+YEARS[57] = 40
+YEARS[58] = 80
 
 control_bits = np.zeros(BITS_PER_SECOND, dtype=bool)
 control_bits[range(9,100,10)] = True
@@ -114,9 +114,9 @@ control_bits[0] = True
 # UTILITY FUNCTIONS
 #-------------------------------------------------------------------------------
 
-def get_date_from_timeseries(timeseries):
-    """Decode the input waveform, which is assumed to be a 16384hz digitized
-    IRIG-B signal using DCLS (DC Level Shift)."""
+def decode_timeseries(timeseries):
+    """Return the full decoded information as a dictionary along with a decoded
+    datetime object for more convenient manipulation."""
     # filter the timeseries to remove ringing at corners
     # filt = scf.gaussian_filter1d(timeseries, CONVOLUTION_SIGMA * SAMPLE_RATE)
 
@@ -137,15 +137,25 @@ def get_date_from_timeseries(timeseries):
                         + str((bits == 2) == control_bits))
 
     # find total seconds, minutes, hours, days, and years
-    tot_s = bits.dot(seconds)
-    tot_m = bits.dot(minutes)
-    tot_h = bits.dot(hours)
-    tot_d = bits.dot(days)
-    tot_y = bits.dot(years) + 100*CURRENT_CENTURY
+    decoded = {
+        'second': bits.dot(SECONDS),
+        'minute': bits.dot(MINUTES),
+        'hour': bits.dot(HOURS),
+        'day': bits.dot(DAYS),
+        'year': bits.dot(YEARS) + 100*CURRENT_CENTURY,
+    }
 
-    # return datetime from this
-    jan1 = datetime.datetime(tot_y, 1, 1, tot_h, tot_m, tot_s)
-    return jan1 + datetime.timedelta(int(tot_d) - 1)
+    # parse a datetime from this
+    jan1 = datetime(decoded['year'], 1, 1, decoded['hour'], decoded['minute'],
+                    decoded['second'])
+    decoded['datetime_decoded'] = jan1 + timedelta(decoded['day'] - 1)
+
+    return decoded
+
+def get_date_from_timeseries(timeseries):
+    """Decode the input waveform, which is assumed to be a 16384hz digitized
+    IRIG-B signal using DCLS (DC Level Shift)."""
+    return decode_timeseries(timeseries)['datetime_decoded']
 
 def print_formatted_date(converted_date):
     # finally, print the date
