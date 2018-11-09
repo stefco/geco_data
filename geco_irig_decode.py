@@ -148,14 +148,14 @@ def decode_timeseries(timeseries):
     # parse a datetime from this
     jan1 = datetime(decoded['year'], 1, 1, decoded['hour'], decoded['minute'],
                     decoded['second'])
-    decoded['datetime_decoded'] = jan1 + timedelta(decoded['day'] - 1)
+    decoded['datetime'] = jan1 + timedelta(decoded['day'] - 1)
 
     return decoded
 
 def get_date_from_timeseries(timeseries):
     """Decode the input waveform, which is assumed to be a 16384hz digitized
     IRIG-B signal using DCLS (DC Level Shift)."""
-    return decode_timeseries(timeseries)['datetime_decoded']
+    return decode_timeseries(timeseries)['datetime']
 
 def print_formatted_date(converted_date):
     # finally, print the date

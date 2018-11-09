@@ -51,6 +51,7 @@ def check_decoded_times(start_time, timewindow=30):
     EVNT log."""
     for chan in CHANS:
         format_string = 'Decoding {}+/-{}s on channel {}.'
+        start_time = int(start_time)
         msg = format_string.format(start_time, timewindow, chan)
         print(msg)
         # print a header, since output will be arranged tabularly, e.g.
@@ -73,7 +74,7 @@ def check_decoded_times(start_time, timewindow=30):
             leap_seconds = get_leap_seconds(gps_actual)
             t_actual = Time(gps_actual, format='gps', scale='utc')
             decoded = geco_irig_decode.decode_timeseries(timeseries_slice)
-            t = decoded['datetime_decoded']
+            t = decoded['datetime']
             dt = (t - t_actual.to_datetime()).seconds
             datetime_actual = t_actual.to_datetime().strftime(TFORMAT)
             # check whether the times agree, or whether they are off by the
@@ -85,9 +86,13 @@ def check_decoded_times(start_time, timewindow=30):
             else:
                 scale = "ERROR"
             print(row_fmt.format(gps_actual=gps_actual,
-                                 gps_decoded=Time(t).gps, leap=leap_seconds,
-                                 scale=scale, datetime_actual=datetime_actual,
+            # foo = dict(gps_actual=gps_actual,
+                                 gps_decoded=int(Time(t).gps),
+                                 leap=leap_seconds, scale=scale,
+                                 datetime_decoded=t.strftime(TFORMAT),
+                                 datetime_actual=datetime_actual,
                                  **decoded))
+            # print(foo)
 
 
 def main():
