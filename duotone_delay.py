@@ -3,7 +3,8 @@
 # (c) Stefan Countryman 2017, several functions translated from MATLAB code by
 # Keita Kawabe (translated code attributed in dosctrings). Keita's code
 # available at:
-# svn.ligo.caltech.edu/svn/aligocalibration/trunk/Common/MatlabTools/timing
+# svn.ligo.caltech.edu/svn/aligocalibration/trunk/Common/MatlabTools/timingi
+# edited Yasmeen Asali 2019, new timing channel names updated
 # Functions to measure DuoTone timing delay and make DuoTone related plots.
 
 DESC="""A module (that can also be used as a script) for plotting delay
@@ -39,6 +40,8 @@ if __name__ == '__main__':
                               "surrounding the specified GPS time, as well as "
                               "a vertical line indicating the DuoTone delay "
                               "deviation at the specified GPS time. "
+                              "Note: if running on pre January 2019 data, "
+                              "manually uncomment the function with old channel names. "
                               "Based on Keita's MATLAB code.").format(MINUTES))
     parser.add_argument('-i','--ifo', choices=IFOs,
                         help=('Which IFO to include in the plot.'))
@@ -58,11 +61,23 @@ import scipy.signal
 
 # get a list of channels to plot and analyze
 def chans(IFO):
+    return  ['{}:CAL-PCALX_FPGA_DTONE_ADC_DQ'.format(IFO),
+             '{}:CAL-PCALY_FPGA_DTONE_ADC_DQ'.format(IFO),
+             '{}:OMC-FPGA_DTONE_IN1_DQ'.format(IFO),
+             '{}:CAL-PCALX_DAC_DTONE_LOOPBACK_DQ'.format(IFO),
+             '{}:CAL-PCALY_DAC_DTONE_LOOPBACK_DQ'.format(IFO)]
+             #'{}:CAL-PCALX_FPGA_DTONE_DAC_DQ'.format(IFO), #new extra DAC channel
+             #'{}:CAL-PCALY_FPGA_DTONE_DAC_DQ'.format(IFO)] #new extra DAC channel
+
+'''
+#uncomment this function to generate plots for the old timing channels (pre January 2019) 
+def chans(IFO):
     return  ['{}:CAL-PCALX_FPGA_DTONE_IN1_DQ'.format(IFO),
              '{}:CAL-PCALY_FPGA_DTONE_IN1_DQ'.format(IFO),
              '{}:OMC-FPGA_DTONE_IN1_DQ'.format(IFO),
              '{}:CAL-PCALX_DAC_FILT_DTONE_IN1_DQ'.format(IFO),
              '{}:CAL-PCALY_DAC_FILT_DTONE_IN1_DQ'.format(IFO)]
+'''
 
 def duotoneDelay(duotone, f1, f2, t):
     """Directly translated from Keita's MATLAB function of the same name.
