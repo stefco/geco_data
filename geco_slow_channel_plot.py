@@ -804,7 +804,12 @@ class Plotter(Cacheable):
         """Get time ticks for this plot. Should always be between 5 and 10
         tickmarcks."""
         start, end = self.t_lim
-        logduration = np.log10(end - start)
+        deltat = end - start
+        if deltat <= 0:
+            sys.stderr.write(("Got deltat = 0 in t_ticks for {}, start={}, "
+                              "end={}").format(self, start, end))
+            return list(np.arange(np.ceil(start), np.ceil.start+1))
+        logduration = np.log10(deltat)
         logdurationflr = int(np.floor(logduration))
         # pick number of days per tick so that we have 5 - 10 ticks
         if logduration - logdurationflr > 0.65:
