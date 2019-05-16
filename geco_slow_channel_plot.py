@@ -787,6 +787,19 @@ class Plotter(Cacheable):
             right = self.plot_properties['xlim_right']
         else:
             right = self.t_axis.max()
+        if left > right:
+            if 'xlim_left' in self.plot_properties:
+                if 'xlim_right' in self.plot_properties:
+                    msg = ("xlim_left ({}) must be less than xlim_right "
+                           "({}).").format(left, right)
+                else:
+                    msg = ("xlim_left ({}) larger than the latest time in "
+                           "this plot ({}).").format(left, right)
+            else:
+                msg = ("xlim_right ({}) smaller than the earliest time in "
+                       "this plot ({}).").format(right, left)
+            raise ValueError("You specified inconsistent plot t-axis limits "
+                             "in your jobspec file plot_properties: " + msg)
         return (left, right)
     @property
     def t_label(self):
