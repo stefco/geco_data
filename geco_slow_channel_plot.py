@@ -753,9 +753,9 @@ class Plotter(Cacheable):
             fmt = ("Difference between {} and Distribution System Time [ns]\n"
                    "Linear Trend Removed ({:.2f} ns intercept, "
                    "{:.2E} drift coefficient)")
-            bestfit, driftcoeff, linregress = self.linregress
+            bestfit, driftcoeff, intercept = self.linregress
             y_label = fmt.format(self.channel_description,
-                                 linregress.intercept / SEC_PER['ns'],
+                                 intercept / SEC_PER['ns'],
                                  driftcoeff)
         else:
             fmt = ("Difference between {} and Distribution\nSystem Time [ns], "
@@ -828,7 +828,7 @@ class Plotter(Cacheable):
         colons (:) replaced in order to fit filename conventions."""
         return geco_gwpy_dump.sanitize_for_filename(self.dq_flag)
     LinRegress = collections.namedtuple('LinRegress',
-                                        ['bestfit', 'driftcoeff', 'linregress'])
+                                        ['bestfit', 'driftcoeff', 'intercept'])
     @property
     @Cacheable._cacheable
     def linregress(self):
@@ -839,15 +839,15 @@ class Plotter(Cacheable):
         cleandata  = np.delete(self.plot_vars.means, self.bad_indices.means)
         cleantimes = np.delete(self.t_axis, self.bad_indices.means)
         if len(cleandata) != 0:
-            r = scipy.stats.linregress(cleantimes, cleandata)
-            bestfit = r.slope * self.t_axis + r.intercept
-            driftcoeff = r.slope / SEC_PER[self.t_units]
+            slope, intercept, r_value, p_value, stderr = scipy.stats.linregress(
+                cleantimes, cleandata)
+            bestfit = slope * self.t_axis + intercept
+            driftcoeff = slope / SEC_PER[self.t_units]
         else:
             bestfit = 0
             driftcoeff = 0
-            r = None
         return self.LinRegress(bestfit=bestfit, driftcoeff=driftcoeff,
-                               linregress=r)
+                               intercept=intercept)
     @property
     def trend(self):
         """Subtract the trend specified in
@@ -866,7 +866,7 @@ class Plotter(Cacheable):
         elif self.plot_properties['detrend'] == 'none':
             trend = 0
         elif self.plot_properties['detrend'] == 'linear':
-            trend, driftcoeff, linregress = self.linregress
+            trend, driftcoeff, intercept = self.linregress
         else:
             trend = self.plot_properties['detrend']
         return trend
