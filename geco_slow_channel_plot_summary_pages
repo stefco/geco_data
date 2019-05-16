@@ -3,24 +3,66 @@
 # Make a plots for jobspec and put them in public_html for browser viewing on
 # ldas-pcdev2.ligo.caltech.edu
 
+set -o errexit
+
 olddir=old-plots-`date +%s`
-mkdir -p ~/public_html/slow-channels/${olddir}
+slowchanneldir=~/public_html/slow-channels/
+mkdir -p "${slowchanneldir}/${olddir}"
 DATE=`date`
+REGEN_PLOTS=0  # regenerate plots by default
+
+# cool posix trick 
+# https://unix.stackexchange.com/questions/258512/how-to-remove-a-positional-parameter-from
+for arg do
+    shift
+    if [[ $arg = -h ]] || [[ $arg = --help ]]; then
+        echo "USAGE: $(basename $0) [-n] [jobdir1] ... [jobdirN]"
+        echo
+        echo 'Create all geco slow channel plots by calling '
+        echo '`geco_slow_channel_plot.py` in the specified directory.'
+        echo 'Then, copy those files to a directory in your `public_html`'
+        echo "folder (${slowchanneldir})"
+        echo 'named after the run and accessible at'
+        echo 'ldas-jobs.ligo.caltech.edu/~your.username/slow-channels/run'
+        echo 'where `run` is the name of the run and `your.username` is, of'
+        echo 'course, your LIGO CalTech username. Also generates a webpage'
+        echo 'containing all of the generated plots (and archives the old'
+        echo 'version of the webpage away for recordkeeping).'
+        echo
+        echo 'The list of job directories defaults to the current directory.'
+        echo 'This script looks for jobspecs in a file called `jobspec.json` '
+        echo 'in the specified directories.'
+        echo
+        echo 'If `-n` option is provided, do not regenerate plots; instead,'
+        echo 'just copy the existing plots to your `public_html` folder.'
+        exit
+    elif [[ $arg = -n ]]; then
+        REGEN_PLOTS=1  # do not regenerate plots
+    else
+        # add this argument back to the list of arguments
+        set -- "$@" "$arg"
+    fi
+done
 
 # set default command-line arg values if no channels are specified
 if [ "$#" -eq 0 ]; then
-    set -- ~/slow-channel-scratch/o1_slow_channels
+    set -- .
 fi
 
 for jobdir in "$@"; do
+    echo "canonicalizing path to jobdir ${jobdir}"
+    pushd >/dev/null "${jobdir}"
+    jobdir="$(pwd -P)"
+    popd >/dev/null
     echo "on jobdir ${jobdir}"
     # get git revision and date
-    pushd ~/dev/geco_data
+    pushd >/dev/null ~/dev/geco_data
     GIT_REV=`git rev-parse HEAD`
-    popd
+    echo "git revision of geco_data: $GIT_REV"
+    popd >/dev/null
 
     # get the run title
-    pushd ${jobdir}
+    pushd >/dev/null "${jobdir}"
     # the ugly wrapping python code below just dedents the text so that it is
     # valid python
     RUN="$(python -c 'import textwrap; exec(textwrap.dedent(r"""
@@ -30,21 +72,30 @@ for jobdir in "$@"; do
         f.close()
         print(run)
     """+" "*4))')"
+    echo "Parsed run title: $RUN"
 
     # generate plots for each job
-    geco_slow_channel_plot.py
-    popd
+    if [ ${REGEN_PLOTS} -eq 0 ]; then
+        echo "GENERATING PLOTS; get a cup of coffee"
+        geco_slow_channel_plot.py
+    else
+        echo "Not regenerating plots since -n flag provided."
+    fi
+    popd >/dev/null
 
     # move plots around
-    pushd ~/public_html/slow-channels
-    if [ -d ${RUN} ]; then
-        mv ${RUN} ${olddir}
+    pushd >/dev/null ~/public_html/slow-channels
+    echo "Archiving old version of the slow channel plots site to ${olddir}"
+    if [ -d "${RUN}" ]; then
+        mv "${RUN}" "${olddir}"
     fi
-    mkdir ${RUN}
-    pushd ${RUN}
-    cp ${jobdir}/*ANALYSIS*png .
+    mkdir "${RUN}"
+    pushd >/dev/null "${RUN}"
+    echo "Copying files from ${jobdir} to $(pwd)"
+    cp "${jobdir}"/*ANALYSIS*png .
 
     # generate summary page
+    echo "Generating summary webpage."
     cat >index.html <<__HEAD__
     <!DOCTYPE html>
     <html>
@@ -67,6 +118,7 @@ __HEAD__
     </body>
     </html>
 __TAIL__
-    popd
-    popd
+    popd >/dev/null
+    popd >/dev/null
 done
+echo "Done, all summary pages created successfully."
